@@ -60,6 +60,28 @@ impl Curve {
         Self::new(times, values)
     }
 
+    /// Pointwise sum of two curves.
+    pub fn add(&self, other: &Curve) -> Curve {
+        let mut times: Vec<f64> = self.times.iter().chain(&other.times).copied().collect();
+        times.sort_by(f64::total_cmp);
+        times.dedup();
+        let values = times.iter().map(|&t| self.at(t) + other.at(t)).collect();
+        Curve::new(times, values)
+    }
+
+    /// Hashes performed between `from` and `to`.
+    pub fn integral(&self, from: f64, to: f64) -> f64 {
+        let mut total = 0.0;
+        for (i, &start) in self.times.iter().enumerate() {
+            let end = self.times.get(i + 1).copied().unwrap_or(f64::INFINITY);
+            let (lo, hi) = (start.max(from), end.min(to));
+            if hi > lo {
+                total += self.values[i] * (hi - lo);
+            }
+        }
+        total
+    }
+
     pub fn at(&self, time: f64) -> f64 {
         let idx = self.times.partition_point(|&t| t <= time).saturating_sub(1);
         self.values[idx]
@@ -81,5 +103,19 @@ impl Curve {
             now = segment_end;
             idx += 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Curve;
+
+    #[test]
+    fn curve_sum_and_integral() {
+        let a = Curve::new(vec![f64::MIN, 10.0], vec![1.0, 3.0]);
+        let b = Curve::new(vec![f64::MIN, 5.0], vec![2.0, 0.0]);
+        let sum = a.add(&b);
+        assert_eq!((sum.at(0.0), sum.at(7.0), sum.at(20.0)), (3.0, 1.0, 3.0));
+        assert_eq!(sum.integral(0.0, 20.0), 3.0 * 5.0 + 1.0 * 5.0 + 3.0 * 10.0);
     }
 }

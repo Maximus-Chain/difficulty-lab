@@ -28,6 +28,7 @@ pub struct Options {
     /// Hashrate multiplier during the collapse (0.01 = 99% of miners leave).
     pub crash_factors: Vec<f64>,
     pub crash_hours: f64,
+    pub switching_runs: usize,
     /// Output of the `superblocks` subcommand, embedded as-is when available.
     pub superblocks: Option<Value>,
     /// Seconds of wasted hashing after each block (see `sim::run`).
@@ -45,6 +46,8 @@ pub struct Report {
     validation: Validation,
     real: Real,
     scenarios: Vec<Scenario>,
+    switching: crate::switching::Switching,
+    asert_sweep: Vec<SweepPoint>,
     superblocks: Option<Value>,
 }
 
@@ -137,7 +140,9 @@ struct Spec<'a> {
     crash: Option<(f64, f64)>,
 }
 
-fn algos() -> Vec<Box<dyn DifficultyAlgo + Send + Sync>> {
+pub type Algos = Vec<Box<dyn DifficultyAlgo + Send + Sync>>;
+
+pub fn algos() -> Algos {
     vec![
         Box::new(Dgw::CURRENT),
         Box::new(Dgw { fix_timespan: true, fix_average: false }),
@@ -153,8 +158,12 @@ fn algos() -> Vec<Box<dyn DifficultyAlgo + Send + Sync>> {
     ]
 }
 
-fn run_scenario(spec: Spec, params: &Params) -> Scenario {
-    let algos = algos();
+/// ASERT across the range where the main comparison puts the best trade-off.
+pub fn asert_sweep() -> Algos {
+    (20..=40).step_by(2).map(|tau| Box::new(Asert { tau }) as Box<dyn DifficultyAlgo + Send + Sync>).collect()
+}
+
+fn run_scenario(spec: Spec, params: &Params, algos: &Algos) -> Scenario {
     // The new rules activate right after the seed, as at a hard fork.
     let params = &Params { fork_height: spec.seed.last().expect("empty seed").height, ..params.clone() };
     let jobs = algos.len() * spec.runs;
@@ -252,7 +261,7 @@ fn series(bins: &Bins, hashrate: Option<Vec<Option<f64>>>, runs: usize) -> Serie
 }
 
 /// Synthetic flat history at exactly T spacing, so pulse/hopper scenarios start in equilibrium.
-fn flat_seed(bits: u32, start: i64, params: &Params) -> Vec<Header> {
+pub fn flat_seed(bits: u32, start: i64, params: &Params) -> Vec<Header> {
     (0..200).map(|h| Header { height: h, time: start + h as i64 * params.target_spacing, bits, n_tx: 1 }).collect()
 }
 
@@ -329,94 +338,107 @@ pub fn build(headers: &[Header], opts: &Options) -> Report {
     let seed = flat_seed(tip.bits, 0, &params);
     let t0 = seed.last().unwrap().time as f64;
 
-    let replay = Spec {
-        latency: opts.latency,
-        id: "replay".into(),
-        title: "Replay of the real hashrate".into(),
-        description: format!(
-            "Hashrate estimated from the real chain ({}-block centered window) drives each algorithm from height {} to the tip. \
-             Assumes miners would have behaved the same, so it is a comparison, not a prediction.",
-            opts.hashrate_window, opts.start_height
-        ),
-        seed: &headers[..=opts.start_height],
-        end_time: tip.time as f64,
-        miners: Miners::Fixed(Curve::from_chain(headers, opts.hashrate_window)),
-        runs: opts.replay_runs,
-        bins: daily.clone(),
-        zoom: zoom_window,
-        crash: None,
+    let make_specs = || {
+        let replay = Spec {
+            latency: opts.latency,
+            id: "replay".into(),
+            title: "Replay of the real hashrate".into(),
+            description: format!(
+                "Hashrate estimated from the real chain ({}-block centered window) drives each algorithm from height {} to the tip. \
+                 Assumes miners would have behaved the same, so it is a comparison, not a prediction.",
+                opts.hashrate_window, opts.start_height
+            ),
+            seed: &headers[..=opts.start_height],
+            end_time: tip.time as f64,
+            miners: Miners::Fixed(Curve::from_chain(headers, opts.hashrate_window)),
+            runs: opts.replay_runs,
+            bins: daily.clone(),
+            zoom: zoom_window,
+            crash: None,
+        };
+
+        let pulse_start = t0 + 86_400.0;
+        let pulse_end = pulse_start + 4.0 * 3_600.0;
+        let pulse = Spec {
+            latency: opts.latency,
+            id: "pulse".into(),
+            title: format!("Hashrate pulse: x{} for 4 hours", opts.pulse_factor),
+            description: format!(
+                "Constant hashrate matching today's difficulty, multiplied by {} for 4 hours and then back. \
+                 Shows how fast each algorithm catches up when big miners arrive and how long blocks stall when they leave.",
+                opts.pulse_factor
+            ),
+            seed: &seed,
+            end_time: t0 + 3.0 * 86_400.0,
+            miners: Miners::Fixed(Curve::new(
+                vec![f64::MIN, pulse_start, pulse_end],
+                vec![h0, h0 * opts.pulse_factor, h0],
+            )),
+            runs: opts.pulse_runs,
+            bins: Bins::new(t0, 600.0, 3 * 144),
+            zoom: (pulse_start - 3_600.0, pulse_end + 3.0 * 3_600.0),
+            crash: None,
+        };
+
+        let hoppers = Spec {
+            latency: opts.latency,
+            id: "hoppers".into(),
+            title: "Profit-switching miners".into(),
+            description: format!(
+                "Constant base hashrate plus switching miners worth {}x the base, who join while difficulty is below {}x \
+                 the base-justified level and leave above {}x. This is the classic cause of slow stretches followed by bursts.",
+                opts.hopper_extra, opts.hopper_join, opts.hopper_leave
+            ),
+            seed: &seed,
+            end_time: t0 + 14.0 * 86_400.0,
+            miners: Miners::Hoppers {
+                base: Curve::constant(h0),
+                extra: opts.hopper_extra * h0,
+                join: opts.hopper_join,
+                leave: opts.hopper_leave,
+            },
+            runs: opts.hopper_runs,
+            bins: Bins::new(t0, 3_600.0, 14 * 24),
+            zoom: (t0 + 7.0 * 86_400.0, t0 + 7.0 * 86_400.0 + 6.0 * 3_600.0),
+            crash: None,
+        };
+
+        let crash_start = t0 + 86_400.0;
+        let crash_end = crash_start + opts.crash_hours * 3_600.0;
+        let crashes = opts.crash_factors.iter().map(|&factor| Spec {
+            latency: opts.latency,
+            id: format!("crash-{:.0}", (1.0 - factor) * 100.0),
+            title: format!("Sudden collapse: hashrate x{factor} for {} hours", opts.crash_hours),
+            description: format!(
+                "Constant hashrate matching today's difficulty, then {:.0}% of it disappears at once for {} hours before coming back, \
+                 like the real collapse of October 2025. Measures how fast each rule lets the remaining miners find blocks again, \
+                 and how big the flood of fast blocks is when the hashrate returns.",
+                (1.0 - factor) * 100.0,
+                opts.crash_hours
+            ),
+            seed: &seed,
+            end_time: crash_end + 12.0 * 3_600.0,
+            miners: Miners::Fixed(Curve::new(vec![f64::MIN, crash_start, crash_end], vec![h0, h0 * factor, h0])),
+            runs: opts.crash_runs,
+            // 10-minute bins from 2 hours before the collapse to 12 hours after the hashrate returns.
+            bins: Bins::new(crash_start - 7_200.0, 600.0, ((opts.crash_hours + 14.0) * 6.0) as usize),
+            zoom: (crash_start - 3_600.0, crash_end + 2.0 * 3_600.0),
+            crash: Some((crash_start, crash_end)),
+        });
+
+        [replay, pulse, hoppers].into_iter().chain(crashes).collect::<Vec<_>>()
     };
 
-    let pulse_start = t0 + 86_400.0;
-    let pulse_end = pulse_start + 4.0 * 3_600.0;
-    let pulse = Spec {
-        latency: opts.latency,
-        id: "pulse".into(),
-        title: format!("Hashrate pulse: x{} for 4 hours", opts.pulse_factor),
-        description: format!(
-            "Constant hashrate matching today's difficulty, multiplied by {} for 4 hours and then back. \
-             Shows how fast each algorithm catches up when big miners arrive and how long blocks stall when they leave.",
-            opts.pulse_factor
-        ),
-        seed: &seed,
-        end_time: t0 + 3.0 * 86_400.0,
-        miners: Miners::Fixed(Curve::new(
-            vec![f64::MIN, pulse_start, pulse_end],
-            vec![h0, h0 * opts.pulse_factor, h0],
-        )),
-        runs: opts.pulse_runs,
-        bins: Bins::new(t0, 600.0, 3 * 144),
-        zoom: (pulse_start - 3_600.0, pulse_end + 3.0 * 3_600.0),
-        crash: None,
-    };
+    let main_algos = algos();
+    let scenarios: Vec<Scenario> = make_specs().into_iter().map(|s| run_scenario(s, &params, &main_algos)).collect();
+    let switching = crate::switching::build(headers, opts.switching_runs, &main_algos);
 
-    let hoppers = Spec {
-        latency: opts.latency,
-        id: "hoppers".into(),
-        title: "Profit-switching miners".into(),
-        description: format!(
-            "Constant base hashrate plus switching miners worth {}x the base, who join while difficulty is below {}x \
-             the base-justified level and leave above {}x. This is the classic cause of slow stretches followed by bursts.",
-            opts.hopper_extra, opts.hopper_join, opts.hopper_leave
-        ),
-        seed: &seed,
-        end_time: t0 + 14.0 * 86_400.0,
-        miners: Miners::Hoppers {
-            base: Curve::constant(h0),
-            extra: opts.hopper_extra * h0,
-            join: opts.hopper_join,
-            leave: opts.hopper_leave,
-        },
-        runs: opts.hopper_runs,
-        bins: Bins::new(t0, 3_600.0, 14 * 24),
-        zoom: (t0 + 7.0 * 86_400.0, t0 + 7.0 * 86_400.0 + 6.0 * 3_600.0),
-        crash: None,
-    };
-
-    let crash_start = t0 + 86_400.0;
-    let crash_end = crash_start + opts.crash_hours * 3_600.0;
-    let crashes = opts.crash_factors.iter().map(|&factor| Spec {
-        latency: opts.latency,
-        id: format!("crash-{:.0}", (1.0 - factor) * 100.0),
-        title: format!("Sudden collapse: hashrate x{factor} for {} hours", opts.crash_hours),
-        description: format!(
-            "Constant hashrate matching today's difficulty, then {:.0}% of it disappears at once for {} hours before coming back, \
-             like the real collapse of October 2025. Measures how fast each rule lets the remaining miners find blocks again, \
-             and how big the flood of fast blocks is when the hashrate returns.",
-            (1.0 - factor) * 100.0,
-            opts.crash_hours
-        ),
-        seed: &seed,
-        end_time: crash_end + 12.0 * 3_600.0,
-        miners: Miners::Fixed(Curve::new(vec![f64::MIN, crash_start, crash_end], vec![h0, h0 * factor, h0])),
-        runs: opts.crash_runs,
-        // 10-minute bins from 2 hours before the collapse to 12 hours after the hashrate returns.
-        bins: Bins::new(crash_start - 7_200.0, 600.0, ((opts.crash_hours + 14.0) * 6.0) as usize),
-        zoom: (crash_start - 3_600.0, crash_end + 2.0 * 3_600.0),
-        crash: Some((crash_start, crash_end)),
-    });
-
-    let scenarios = [replay, pulse, hoppers].into_iter().chain(crashes).map(|s| run_scenario(s, &params)).collect();
+    // The ASERT sweep reuses every scenario except the pulse, which separates nothing here.
+    let sweep_algos = asert_sweep();
+    let sweep_scenarios: Vec<Scenario> =
+        make_specs().into_iter().filter(|s| s.id != "pulse").map(|s| run_scenario(s, &params, &sweep_algos)).collect();
+    let sweep_switching = crate::switching::build(headers, opts.switching_runs, &sweep_algos);
+    let asert_sweep = sweep_points(&sweep_algos, &sweep_scenarios, &sweep_switching);
 
     Report {
         target_spacing: params.target_spacing,
@@ -431,6 +453,45 @@ pub fn build(headers: &[Header], opts: &Options) -> Report {
         },
         real,
         scenarios,
+        switching,
+        asert_sweep,
         superblocks: opts.superblocks.clone(),
     }
+}
+
+/// One ASERT half-life in the sweep, with the numbers the summary table compares.
+#[derive(Serialize)]
+struct SweepPoint {
+    tau: u32,
+    mean_solvetime: f64,
+    gaps_per_day: f64,
+    jitter_pct: f64,
+    hopper_gaps_per_day: f64,
+    hopper_edge: f64,
+    hours_to_normal_80: f64,
+    hours_to_normal_99: f64,
+    blocks_6h_99: f64,
+    burst_99: f64,
+    pool_bonus_99_6h: f64,
+}
+
+fn sweep_points(algos: &Algos, scenarios: &[Scenario], switching: &crate::switching::Switching) -> Vec<SweepPoint> {
+    let find = |id: &str, i: usize| &scenarios.iter().find(|s| s.id == id).unwrap_or_else(|| panic!("no scenario {id}")).algos[i];
+    let recovery = |id: &str, i: usize| find(id, i).recovery.as_ref().expect("crash scenario without recovery");
+    let exit = switching.exits.iter().find(|c| c.share >= 0.99 && c.hours == 6.0).expect("no 99%/6 h exit case");
+    (0..algos.len())
+        .map(|i| SweepPoint {
+            tau: algos[i].name().trim_start_matches("ASERT tau=").parse().expect("sweep holds only ASERT"),
+            mean_solvetime: find("replay", i).metrics.mean.mean_solvetime,
+            gaps_per_day: find("replay", i).metrics.mean.gaps_over_7min_per_day,
+            jitter_pct: find("replay", i).metrics.mean.difficulty_jitter_pct,
+            hopper_gaps_per_day: find("hoppers", i).metrics.mean.gaps_over_7min_per_day,
+            hopper_edge: switching.hoppers[0].algos[i].edge,
+            hours_to_normal_80: recovery("crash-80", i).hours_to_normal.mean,
+            hours_to_normal_99: recovery("crash-99", i).hours_to_normal.mean,
+            blocks_6h_99: recovery("crash-99", i).blocks_6h.mean,
+            burst_99: recovery("crash-99", i).blocks_first_hour_after.mean,
+            pool_bonus_99_6h: exit.algos[i].pool,
+        })
+        .collect()
 }

@@ -16,6 +16,7 @@
   --shade: rgba(42, 120, 214, 0.08);
   --hopper: rgba(235, 104, 52, 0.12);
   --bad: #c0322b;
+  --good: #11804a;
   --s-real: #3d4450;
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
   --s7: #7b4fd6; --s8: #0b8ea0; --s9: #8a6d00; --s10: #a8452a; --s11: #4e6278;
@@ -26,7 +27,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #111317; --surface: #191c21; --ink: #eef0f3; --ink-2: #b7bdc7; --muted: #8d95a1;
-    --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a;
+    --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a; --good: #4fc98a;
     --s-real: #c9ced6;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a; --s10: #d97a5c; --s11: #8ea3ba;
     color-scheme: dark;
@@ -34,7 +35,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #111317; --surface: #191c21; --ink: #eef0f3; --ink-2: #b7bdc7; --muted: #8d95a1;
-  --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a;
+  --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a; --good: #4fc98a;
   --s-real: #c9ced6;
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a; --s10: #d97a5c; --s11: #8ea3ba;
   color-scheme: dark;
@@ -58,11 +59,11 @@ p { margin: 0; max-width: 68ch; }
 header { display: flex; flex-direction: column; gap: 14px; }
 .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; font: 13px/1.4 var(--mono); color: var(--ink-2); }
 .facts b { color: var(--ink); font-weight: 500; }
-.ok { color: #0ca30c; font-weight: 600; }
+.ok { color: var(--good); font-weight: 600; }
 .notice { border: 1px solid var(--rule); border-left: 3px solid var(--ink-2); background: var(--surface); border-radius: 4px; padding: 10px 14px; font-size: 14px; color: var(--ink-2); max-width: 78ch; }
 .notice b { color: var(--ink); }
 
-.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
 .finding { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .finding .big { font: 700 28px/1.1 var(--display); font-variant-numeric: tabular-nums; }
 .finding p { font-size: 14px; color: var(--ink-2); }
@@ -111,6 +112,14 @@ th .rng { display: block; font: 10px var(--mono); color: var(--muted); text-tran
 td .rng { display: block; font: 11px var(--mono); color: var(--muted); }
 td .name { display: inline-flex; gap: 8px; align-items: center; font-weight: 600; }
 td.bad { color: var(--bad); font-weight: 600; }
+td.best { color: var(--good); font-weight: 700; }
+tr.group td { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 14px; border-bottom: 1px solid var(--rule); }
+tr.wins td { font-weight: 600; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 13px var(--mono); }
+.toc a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.toc a:hover { color: var(--ink); border-color: var(--ink-2); }
+.toc .label { font: 500 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.filters .group { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-left: 8px; }
 td .name i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
 tr.real td { background: var(--grid); }
 .note { font-size: 13px; color: var(--muted); }
@@ -123,12 +132,28 @@ code { font: 12.5px var(--mono); background: var(--grid); padding: 1px 5px; bord
   <header>
     <span class="eyebrow">Maximus mainnet · difficulty adjustment study</span>
     <h1>Maximus Difficulty Lab</h1>
-    <p class="lede">The current Dark Gravity Wave (DGW v3) compared with LWMA-1 and with ASERT (aserti3-2d, Bitcoin Cash's rule since 2020) at several window sizes, replayed on the real chain and stress-tested with synthetic hashrate patterns. Every simulated algorithm is the same code that reproduces mainnet's own nBits.</p>
+    <p class="lede">The current Dark Gravity Wave (DGW v3) compared with DGW with its bugs fixed, LWMA-1, ASERT (aserti3-2d, Bitcoin Cash's rule since 2020) and WTEMA at several window sizes, replayed on the real chain and stress-tested with synthetic hashrate patterns. Every simulated algorithm is the same code that reproduces mainnet's own nBits.</p>
     <div class="facts" id="facts"></div>
     <p class="notice" role="note"><b>Research only.</b> No change to the difficulty algorithm or to emission has been decided. Any such change would be a hard fork, announced well in advance with an activation height and an upgrade window for pools, exchanges and node operators.</p>
   </header>
 
+  <section id="summary"></section>
+
+
   <div class="findings" id="findings"></div>
+
+  <nav class="toc" aria-label="Sections">
+    <span class="label">Contents</span>
+    <a href="#real">Real chain</a>
+    <a href="#superblocks" id="toc-superblocks">Superblocks</a>
+    <a href="#replay">Replay</a>
+    <a href="#pulse">Hashrate pulse</a>
+    <a href="#hoppers">Profit switching</a>
+    <a href="#switching">Leaving and returning</a>
+    <a href="#crash-summary">Hashrate collapses</a>
+    <a href="#tuning">Tuning ASERT</a>
+    <a href="#method">Method</a>
+  </nav>
 
   <div class="filters" role="group" aria-label="Algorithms shown in the charts">
     <span class="label">Show</span>
@@ -155,14 +180,16 @@ code { font: 12.5px var(--mono); background: var(--grid); padding: 1px 5px; bord
     <p class="note" id="hist-note"></p>
   </section>
 
+  <section id="superblocks" hidden></section>
   <section id="replay"></section>
   <section id="pulse"></section>
   <section id="hoppers"></section>
+  <section id="switching"></section>
   <section id="crash-summary"></section>
   <div id="crash-sections" style="display:contents"></div>
-  <section id="superblocks" hidden></section>
+  <section id="tuning"></section>
 
-  <section>
+  <section id="method">
     <div class="section-head">
       <span class="eyebrow">Method</span>
       <h2>How the numbers were produced</h2>
@@ -181,18 +208,19 @@ code { font: 12.5px var(--mono); background: var(--grid); padding: 1px 5px; bord
 <script>
 const REPORT = __REPORT_DATA__;
 
+// Grouped by family, each family from the smallest change (or window) to the largest.
 const ALGOS = [
-  { name: "DGW v3", short: "DGW v3 (current)", color: "--s1", on: true },
-  { name: "LWMA-1 N=60", short: "LWMA N=60", color: "--s2", on: true },
-  { name: "DGW v3 (fixed timespan)", short: "DGW, timespan fixed", color: "--s3", on: false },
-  { name: "LWMA-1 N=24", short: "LWMA N=24", color: "--s4", on: false },
-  { name: "LWMA-1 N=45", short: "LWMA N=45", color: "--s5", on: false },
-  { name: "LWMA-1 N=90", short: "LWMA N=90", color: "--s6", on: false },
-  { name: "ASERT tau=36", short: "ASERT τ=36", color: "--s7", on: true },
-  { name: "ASERT tau=24", short: "ASERT τ=24", color: "--s8", on: false },
-  { name: "ASERT tau=72", short: "ASERT τ=72", color: "--s9", on: false },
-  { name: "DGW v3 (corrected)", short: "DGW corrected", color: "--s10", on: false },
-  { name: "WTEMA M=36", short: "WTEMA M=36", color: "--s11", on: false },
+  { name: "DGW v3", short: "DGW v3 (current)", color: "--s1", on: true, family: "DGW" },
+  { name: "DGW v3 (fixed timespan)", short: "DGW, timespan fixed", color: "--s3", on: false, family: "DGW" },
+  { name: "DGW v3 (corrected)", short: "DGW corrected", color: "--s10", on: false, family: "DGW" },
+  { name: "LWMA-1 N=24", short: "LWMA N=24", color: "--s4", on: false, family: "LWMA-1" },
+  { name: "LWMA-1 N=45", short: "LWMA N=45", color: "--s5", on: false, family: "LWMA-1" },
+  { name: "LWMA-1 N=60", short: "LWMA N=60", color: "--s2", on: true, family: "LWMA-1" },
+  { name: "LWMA-1 N=90", short: "LWMA N=90", color: "--s6", on: false, family: "LWMA-1" },
+  { name: "ASERT tau=24", short: "ASERT τ=24", color: "--s8", on: false, family: "ASERT" },
+  { name: "ASERT tau=36", short: "ASERT τ=36", color: "--s7", on: true, family: "ASERT" },
+  { name: "ASERT tau=72", short: "ASERT τ=72", color: "--s9", on: false, family: "ASERT" },
+  { name: "WTEMA M=36", short: "WTEMA M=36", color: "--s11", on: false, family: "WTEMA" },
 ];
 const REAL = { name: "Real", short: "Real chain", color: "--s-real" };
 const T = REPORT.target_spacing;
@@ -479,8 +507,64 @@ document.getElementById("findings").innerHTML = [
   [fmt(lwR.blocks_per_day - dgwR.blocks_per_day, 0) + " / day", `extra blocks if block time moves to the true target: emission per day rises by about ${fmt((lwR.blocks_per_day / dgwR.blocks_per_day - 1) * 100, 1)}% and every block-counted cycle gets shorter in days.`],
 ].map(([big, txt]) => `<div class="finding"><span class="big">${big}</span><p>${txt}</p></div>`).join("");
 
+/* ---------- summary scorecard ---------- */
+{
+  const rec = (id, k) => name => { const c = sc(id); const a = c && c.algos.find(x => x.name === name); return a && a.recovery ? a.recovery[k].mean : null; };
+  const sw = (list, i, k) => name => { const c = R.switching && R.switching[list][i]; const a = c && c.algos.find(x => x.name === name); return a ? a[k] : null; };
+  const exit6 = R.switching ? R.switching.exits.findIndex(c => c.share >= 0.99 && c.hours === 6) : -1;
+  // [label, sub, value by algorithm, value for the real chain, distance from ideal (lower is better), format]
+  const cols = [
+    ["Mean block time", `replay · target ${T} s`, n => am("replay", n).mean_solvetime, R.real.metrics.mean_solvetime, v => Math.abs(v - T), v => fmt(v, 1) + " s"],
+    ["Gaps > 7 min", "replay · per day", n => am("replay", n).gaps_over_7min_per_day, R.real.metrics.gaps_over_7min_per_day, v => v, v => fmt(v, 1)],
+    ["Difficulty jitter", "replay", n => am("replay", n).difficulty_jitter_pct, R.real.metrics.difficulty_jitter_pct, v => v, v => fmt(v, 1) + "%"],
+    ["Gaps > 7 min", "with profit switchers · per day", n => am("hoppers", n).gaps_over_7min_per_day, null, v => v, v => fmt(v, 1)],
+    ["Switcher edge", "reward per hash vs steady", sw("hoppers", 0, "edge"), null, v => v, v => fmt(v, 2) + "×"],
+    ["Recovery −80%", "hours to normal pace", rec("crash-80", "hours_to_normal"), null, v => v, v => fmt(v, 1) + " h"],
+    ["Recovery −99%", "hours to normal pace", rec("crash-99", "hours_to_normal"), null, v => v, v => fmt(v, 1) + " h"],
+    ["Burst after −99%", `blocks in the hour after return · target ${3600 / T}`, rec("crash-99", "blocks_first_hour_after"), null, v => v, v => fmt(v, 0)],
+    ["Returning pool bonus", "99% away 6 h · reward per hash", sw("exits", exit6, "pool"), null, v => Math.abs(v - 1), v => fmt(v, 2) + "×"],
+  ].filter(c => ALGOS.some(a => c[2](a.name) != null));
+
+  const values = cols.map(c => ALGOS.map(a => c[2](a.name)));
+  const scores = cols.map((c, j) => values[j].map(v => v == null ? null : c[4](v)));
+  const best = scores.map(col => Math.min(...col.filter(v => v != null)));
+  const worst = scores.map(col => Math.max(...col.filter(v => v != null)));
+  // Ties within 2% of the column's spread count as wins too, so noise does not pick a single winner.
+  const near = (v, target, j) => v != null && Math.abs(v - target) <= 0.02 * (worst[j] - best[j] || 1);
+  const count = target => ALGOS.map((_, i) => cols.reduce((n, _, j) => n + (near(scores[j][i], target[j], j) ? 1 : 0), 0));
+  const wins = count(best), losses = count(worst);
+
+  const head = `<tr><th>Algorithm</th>${cols.map(c => `<th>${c[0]}<span class="rng">${c[1]}</span></th>`).join("")}<th>Best in</th><th>Worst in</th></tr>`;
+  const rows = [`<tr class="real"><td><span class="name" style="--c:${cssVar(REAL.color)}"><i></i>Real chain</span></td>` +
+    cols.map(c => `<td>${c[3] == null ? "–" : c[5](c[3])}</td>`).join("") + "<td></td><td></td></tr>"];
+  ALGOS.forEach((a, i) => {
+    if (i === 0 || ALGOS[i - 1].family !== a.family) rows.push(`<tr class="group"><td colspan="${cols.length + 3}">${a.family}</td></tr>`);
+    rows.push(`<tr><td><span class="name" style="--c:${cssVar(a.color)}"><i></i>${a.short}</span></td>` +
+      cols.map((c, j) => {
+        const v = values[j][i];
+        const cls = near(scores[j][i], best[j], j) ? "best" : near(scores[j][i], worst[j], j) ? "bad" : "";
+        return `<td class="${cls}">${v == null ? "–" : c[5](v)}</td>`;
+      }).join("") + `<td>${wins[i] || ""}</td><td>${losses[i] || ""}</td></tr>`);
+  });
+
+  const leadersOf = idx => { const top = Math.max(...idx.map(i => wins[i])); return idx.filter(i => wins[i] === top).map(i => ALGOS[i].short).join(", "); };
+  const all = ALGOS.map((_, i) => i), clean = all.filter(i => losses[i] === 0);
+  const mostWins = leadersOf(all);
+  const worstOf = name => cols.filter((_, j) => near(scores[j][ALGOS.findIndex(a => a.short === name)], worst[j], j)).map(c => c[0].toLowerCase()).reduce((acc, x, i, arr) => acc + (i === 0 ? "" : i === arr.length - 1 ? " and " : ", ") + x, "");
+  const winnersOf = j => ALGOS.filter((_, i) => near(scores[j][i], best[j], j)).map(a => a.short).join(", ");
+  document.getElementById("summary").innerHTML = `
+    <div class="section-head">
+      <span class="eyebrow">Summary</span>
+      <h2>Which rule wins where</h2>
+      <p>Every algorithm on every test, real chain first. Green is the best in each column, red the worst; "best in" counts the columns an algorithm wins. The sections below explain each test.</p>
+    </div>
+    <div class="card" style="padding-bottom:4px"><div class="table-wrap"><table><thead>${head}</thead><tbody>${rows.join("")}</tbody></table></div></div>
+    <p class="note">Most columns won: <b>${mostWins}</b>${worstOf(mostWins.split(", ")[0]) ? `, but it is also the worst at ${worstOf(mostWins.split(", ")[0])}` : ""}. Most columns won without being the worst at anything: <b>${clean.length ? leadersOf(clean) : "none"}</b>. Fastest recovery from a near-total collapse: ${winnersOf(cols.findIndex(c => c[0] === "Recovery −99%"))}. Calmest under profit switching: ${winnersOf(cols.findIndex(c => c[0] === "Switcher edge"))}. No rule wins everything: a slower filter is steadier and harder to game, a faster one recovers sooner, and keeping the chain on schedule (ASERT) is what produces the burst when miners return.</p>`;
+}
+
 const chipHost = document.getElementById("chips");
-for (const a of ALGOS) {
+for (const [i, a] of ALGOS.entries()) {
+  if (i === 0 || ALGOS[i - 1].family !== a.family) chipHost.append(el("span", { class: "group" }, a.family));
   const b = el("button", { class: "chip", type: "button", "aria-pressed": String(visible.has(a.name)), style: `--c:${cssVar(a.color)}` }, `<span class="sw"></span>${a.short}`);
   b.addEventListener("click", () => {
     if (visible.has(a.name)) visible.delete(a.name); else visible.add(a.name);
@@ -718,7 +802,76 @@ function crashSection(crash, withReal) {
   for (const s of [...sizes].reverse()) crashSection(s, crashPct(s) >= 99);
 }
 
+/* ---------- miners switching on purpose ---------- */
+{
+  const SW = R.switching;
+  const nameCell = a => `<td><span class="name" style="--c:${cssVar(a.color)}"><i></i>${a.short}</span></td>`;
+  const table = (title, sub, cases, head, cell) => {
+    const rows = ALGOS.map(a => nameCell(a) + cases.map(c => cell(c.algos.find(x => x.name === a.name))).join(""));
+    return `<div class="card" style="padding-bottom:4px"><div class="card-head"><h3>${title}</h3><p>${sub}</p></div><div class="table-wrap"><table><thead><tr><th>Algorithm</th>${cases.map(head).join("")}</tr></thead>` +
+      `<tbody>${rows.map(r => `<tr>${r}</tr>`).join("")}</tbody></table></div></div>`;
+  };
+  const hopTable = table("Profit switching",
+    "Steady miners plus switching miners worth several times their hashrate, who join while difficulty is below a threshold of what the steady hashrate justifies and leave above another. Cells: switching miners' reward per hash relative to the steady miners, and their share of blocks, over 3 days.",
+    SW.hoppers,
+    c => `<th>${c.extra}× hashrate<span class="rng">join below ${c.join}×, leave above ${c.leave}×</span></th>`,
+    r => `<td class="${r.edge >= 1.2 ? "bad" : ""}">${fmt(r.edge, 2)}<span class="rng">${fmt(100 * r.share, 0)}% of blocks</span></td>`);
+  const exitTable = table("A large pool leaves and comes back",
+    "A pool with 80% or 99% of the hashrate stops mining for a few hours and then returns. Cells: reward per hash relative to mining steadily, from the exit to 24 h after the return, for the pool and (below) for the miners who stayed.",
+    SW.exits,
+    c => `<th>${fmt(100 * c.share, 0)}% off ${fmt(c.hours, 0)} h<span class="rng">pool · miners who stayed</span></th>`,
+    r => `<td class="${r.pool >= 1.1 ? "bad" : ""}">${fmt(r.pool, 2)}<span class="rng">${fmt(r.stayed, 2)}</span></td>`);
+  const get = (cases, i, name) => cases[i].algos.find(x => x.name === name);
+  const exit6 = SW.exits.findIndex(c => c.share >= 0.99 && c.hours === 6);
+  document.getElementById("switching").innerHTML = `
+    <div class="section-head">
+      <span class="eyebrow">Scenario · ${SW.runs} runs per algorithm and case</span>
+      <h2>Can miners profit from leaving and coming back?</h2>
+      <p>Two ways a miner can game the difficulty rule just by choosing when to mine. The number is reward per hash: blocks found per unit of work, so 1.00 means no advantage and 1.30 means 30% more reward than a miner who mines the same work steadily.</p>
+    </div>
+    ${hopTable}
+    <p class="note">This is the weakness of the current rule. DGW's 24-block window reacts after the switching miners have taken the cheap blocks, so they earn about ${fmt(100 * (get(SW.hoppers, 0, "DGW v3").edge - 1), 0)}% more per hash than steady miners, who pay for it with the long gaps. Fixing DGW's bias changes nothing. LWMA N=60 and ASERT τ=36 cut the advantage to ${fmt(100 * (get(SW.hoppers, 0, "ASERT tau=36").edge - 1), 0)}–${fmt(100 * (get(SW.hoppers, 2, "LWMA-1 N=60").edge - 1), 0)}%; slower rules cut it further, at the price of slower recovery after a collapse.</p>
+    ${exitTable}
+    <p class="note">DGW forgets lost time, so a returning pool gains nothing. ASERT keeps the chain on schedule: after a long outage the returning pool collects the catch-up burst and earns ${fmt(100 * (get(SW.exits, exit6, "ASERT tau=36").pool - 1), 0)}% more per hash with τ=36 after 6 hours away, more with a larger τ. That pays only for a pool that mines something else while it is away. A merge-mining pool gives up its Maximus rewards while away and gains nothing elsewhere, so leaving costs it more than the burst gives back. The miners who stay are the clear winners: difficulty falls while they are alone.</p>`;
+}
+
+/* ---------- ASERT half-life sweep ---------- */
+{
+  const P = R.asert_sweep;
+  // [key, label, sub, distance from ideal (lower is better), format]
+  const cols = [
+    ["jitter_pct", "Difficulty jitter", "replay", v => v, v => fmt(v, 1) + "%"],
+    ["gaps_per_day", "Gaps > 7 min", "replay · per day", v => v, v => fmt(v, 2)],
+    ["hopper_gaps_per_day", "Gaps > 7 min", "with profit switchers · per day", v => v, v => fmt(v, 1)],
+    ["hopper_edge", "Switcher edge", "reward per hash vs steady", v => v, v => fmt(v, 3) + "×"],
+    ["hours_to_normal_80", "Recovery −80%", "hours to normal pace", v => v, v => fmt(v, 2) + " h"],
+    ["hours_to_normal_99", "Recovery −99%", "hours to normal pace", v => v, v => fmt(v, 2) + " h"],
+    ["blocks_6h_99", "Blocks in first 6 h", `−99% · target ${6 * 3600 / T}`, v => -v, v => fmt(v, 0)],
+    ["burst_99", "Burst after −99%", `hour after return · target ${3600 / T}`, v => v, v => fmt(v, 0)],
+    ["pool_bonus_99_6h", "Returning pool bonus", "99% away 6 h", v => Math.abs(v - 1), v => fmt(v, 2) + "×"],
+  ];
+  const sc = cols.map(c => P.map(p => c[3](p[c[0]])));
+  const lo = sc.map(col => Math.min(...col)), hi = sc.map(col => Math.max(...col));
+  // Balanced score: each column rescaled to 0 (best tau) .. 1 (worst tau), then averaged with equal weights.
+  const norm = (j, i) => hi[j] > lo[j] ? (sc[j][i] - lo[j]) / (hi[j] - lo[j]) : 0;
+  const score = P.map((_, i) => cols.reduce((sum, _, j) => sum + norm(j, i), 0) / cols.length);
+  const bestScore = Math.min(...score), bestTau = P[score.indexOf(bestScore)].tau;
+  const head = `<tr><th><span style="text-transform:none">τ</span><span class="rng">half-life</span></th>${cols.map(c => `<th>${c[1]}<span class="rng">${c[2]}</span></th>`).join("")}<th>Balanced score<span class="rng">0 = best everywhere</span></th></tr>`;
+  const body = P.map((p, i) => `<tr><td><b>τ=${p.tau}</b><span class="rng">${fmt(p.tau * T * Math.LN2 / 60, 0)} min</span></td>` +
+    cols.map((c, j) => `<td class="${sc[j][i] === lo[j] ? "best" : sc[j][i] === hi[j] ? "bad" : ""}">${c[4](p[c[0]])}</td>`).join("") +
+    `<td class="${score[i] === bestScore ? "best" : ""}">${fmt(score[i], 2)}</td></tr>`).join("");
+  document.getElementById("tuning").innerHTML = `
+    <div class="section-head">
+      <span class="eyebrow">Tuning · ASERT τ from ${P[0].tau} to ${P[P.length - 1].tau} blocks</span>
+      <h2>Is there a perfect half-life?</h2>
+      <p>The same tests for ASERT at every even τ between ${P[0].tau} and ${P[P.length - 1].tau}. A shorter half-life recovers faster after a collapse and makes a smaller burst when the miners return; a longer one is steadier and harder to game by switching in and out. Green and red are the best and worst τ in each column.</p>
+    </div>
+    <div class="card" style="padding-bottom:4px"><div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div></div>
+    <p class="note">There is no τ that is best at everything: stability and the switcher edge improve with τ, recovery and the burst get worse. Weighting every column equally, the best compromise is <b>τ=${bestTau}</b> (half-life ${fmt(bestTau * T * Math.LN2 / 60, 0)} minutes), but the score is flat across the middle of the range, so the choice depends on which risk matters more: collapses (lower τ) or profit switching (higher τ).</p>`;
+}
+
 /* ---------- superblocks ---------- */
+if (!R.superblocks) document.getElementById("toc-superblocks").hidden = true;
 if (R.superblocks) {
   const SB = R.superblocks.superblocks;
   const host = document.getElementById("superblocks");

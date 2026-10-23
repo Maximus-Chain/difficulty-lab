@@ -23,7 +23,7 @@ impl Rng {
     }
 
     /// Uniform in (0, 1].
-    fn uniform(&mut self) -> f64 {
+    pub fn uniform(&mut self) -> f64 {
         ((self.next_u64() >> 11) + 1) as f64 / (1u64 << 53) as f64
     }
 

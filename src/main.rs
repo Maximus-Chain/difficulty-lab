@@ -8,6 +8,7 @@ mod report;
 mod rpc;
 mod sim;
 mod superblocks;
+mod switching;
 mod target;
 
 use algo::{DifficultyAlgo, Mainnet, Params};
@@ -53,6 +54,13 @@ enum Cmd {
         input: PathBuf,
         #[arg(long, default_value_t = 1200)]
         start_height: usize,
+    },
+    /// Miners switching on purpose, for every algorithm: profit switching and a pool that leaves and returns.
+    Switching {
+        #[arg(long, default_value = "data/headers.csv")]
+        input: PathBuf,
+        #[arg(long, default_value_t = 40)]
+        runs: usize,
     },
     /// Audit every superblock: time to mine, budget paid, proposals submitted in its cycle.
     Superblocks {
@@ -105,6 +113,9 @@ enum Cmd {
         crash_factors: Vec<f64>,
         #[arg(long, default_value_t = 24.0)]
         crash_hours: f64,
+        /// Runs per cell for the switching-miner scenarios.
+        #[arg(long, default_value_t = 40)]
+        switching_runs: usize,
         /// Superblock audit to embed in the report (from the `superblocks` subcommand), if present.
         #[arg(long, default_value = "data/superblocks.json")]
         superblocks: PathBuf,
@@ -126,6 +137,7 @@ fn main() -> Result<()> {
             println!("saved {} headers to {}", headers.len(), out.display());
         }
         Cmd::Validate { input } => validate(&chain::read_csv(&input)?),
+        Cmd::Switching { input, runs } => switching::print(&switching::build(&chain::read_csv(&input)?, runs, &report::algos())),
         Cmd::Anomalies { input, start_height } => anomalies::report(&chain::read_csv(&input)?, start_height),
         Cmd::Superblocks { rpc, input, cache, out } => {
             let audit = superblocks::audit(&rpc.client(), &chain::read_csv(&input)?, &cache)?;
@@ -149,6 +161,7 @@ fn main() -> Result<()> {
             crash_runs,
             crash_factors,
             crash_hours,
+            switching_runs,
             superblocks,
             latency,
         } => {
@@ -166,6 +179,7 @@ fn main() -> Result<()> {
                 crash_runs,
                 crash_factors,
                 crash_hours,
+                switching_runs,
                 superblocks: match std::fs::read_to_string(&superblocks) {
                     Ok(text) => Some(serde_json::from_str(&text)?),
                     Err(_) => {
