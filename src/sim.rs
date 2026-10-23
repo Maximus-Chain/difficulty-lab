@@ -90,7 +90,7 @@ pub fn run(
         };
 
         time += solvetime;
-        chain.push(Header { height: chain.len() as u32, time: time.floor() as i64, bits });
+        chain.push(Header { height: chain.len() as u32, time: time.floor() as i64, bits, n_tx: 1 });
         blocks.push(SimBlock { time, solvetime, difficulty: diff, hoppers_on });
     }
     blocks

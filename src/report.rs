@@ -1,13 +1,15 @@
 //! Runs every scenario and assembles the JSON consumed by the HTML report.
 
-use crate::algo::{self, DifficultyAlgo, Dgw, Lwma, Params};
+use crate::algo::{self, Asert, DifficultyAlgo, Dgw, Lwma, Params};
 use crate::chain::Header;
 use crate::hashrate::{self, Curve};
-use crate::metrics::{self, Bins, Metrics, Spread};
+use crate::anomalies::biggest_crash;
+use crate::metrics::{self, Bins, Metrics, Recovery, RecoverySummary, Spread};
 use crate::sim::{self, Miners, Rng, SimBlock};
 use crate::target::difficulty;
+use crate::par::parallel;
 use serde::Serialize;
-use std::sync::Mutex;
+use serde_json::Value;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct Options {
@@ -22,6 +24,12 @@ pub struct Options {
     pub hopper_extra: f64,
     pub hopper_join: f64,
     pub hopper_leave: f64,
+    pub crash_runs: usize,
+    /// Hashrate multiplier during the collapse (0.01 = 99% of miners leave).
+    pub crash_factors: Vec<f64>,
+    pub crash_hours: f64,
+    /// Output of the `superblocks` subcommand, embedded as-is when available.
+    pub superblocks: Option<Value>,
     /// Seconds of wasted hashing after each block (see `sim::run`).
     pub latency: f64,
 }
@@ -37,6 +45,7 @@ pub struct Report {
     validation: Validation,
     real: Real,
     scenarios: Vec<Scenario>,
+    superblocks: Option<Value>,
 }
 
 #[derive(Serialize)]
@@ -51,6 +60,16 @@ struct Real {
     series: Series,
     histogram: Histogram,
     zoom: Zoom,
+    crash: Option<RealCrash>,
+}
+
+/// The sharpest real hashrate collapse, for comparison with the crash scenario.
+#[derive(Serialize)]
+struct RealCrash {
+    height: usize,
+    time: i64,
+    /// Hours since the collapse at which each following block was found.
+    hours: Vec<f64>,
 }
 
 #[derive(Serialize)]
@@ -69,6 +88,8 @@ struct Series {
     solvetime: Vec<Option<f64>>,
     difficulty: Vec<Option<f64>>,
     hashrate: Vec<Option<f64>>,
+    /// Mean number of blocks per bin per run.
+    blocks: Vec<f64>,
 }
 
 /// Block-by-block detail of a short window, from a single run.
@@ -82,10 +103,12 @@ struct Zoom {
 
 #[derive(Serialize)]
 struct Scenario {
-    id: &'static str,
+    id: String,
     title: String,
     description: String,
     runs: usize,
+    /// Collapse window (start, end) for the crash scenario.
+    crash: Option<(f64, f64)>,
     /// Hashrate driving the scenario, sampled at each bin's midpoint.
     hashrate: Vec<f64>,
     algos: Vec<AlgoResult>,
@@ -97,11 +120,12 @@ struct AlgoResult {
     metrics: Spread,
     series: Series,
     zoom: Zoom,
+    recovery: Option<RecoverySummary>,
 }
 
 struct Spec<'a> {
     latency: f64,
-    id: &'static str,
+    id: String,
     title: String,
     description: String,
     seed: &'a [Header],
@@ -110,6 +134,7 @@ struct Spec<'a> {
     runs: usize,
     bins: Bins,
     zoom: (f64, f64),
+    crash: Option<(f64, f64)>,
 }
 
 fn algos() -> Vec<Box<dyn DifficultyAlgo + Send + Sync>> {
@@ -120,33 +145,16 @@ fn algos() -> Vec<Box<dyn DifficultyAlgo + Send + Sync>> {
         Box::new(Lwma { n: 45 }),
         Box::new(Lwma { n: 60 }),
         Box::new(Lwma { n: 90 }),
+        Box::new(Asert { tau: 24 }),
+        Box::new(Asert { tau: 36 }),
+        Box::new(Asert { tau: 72 }),
     ]
-}
-
-/// Runs `f(0..jobs)` on all cores and returns the results in job order.
-fn parallel<R: Send>(jobs: usize, f: impl Fn(usize) -> R + Sync) -> Vec<R> {
-    let next = AtomicUsize::new(0);
-    let results = Mutex::new((0..jobs).map(|_| None).collect::<Vec<Option<R>>>());
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
-    std::thread::scope(|s| {
-        for _ in 0..threads {
-            s.spawn(|| {
-                loop {
-                    let i = next.fetch_add(1, Ordering::Relaxed);
-                    if i >= jobs {
-                        break;
-                    }
-                    let r = f(i);
-                    results.lock().unwrap()[i] = Some(r);
-                }
-            });
-        }
-    });
-    results.into_inner().unwrap().into_iter().map(Option::unwrap).collect()
 }
 
 fn run_scenario(spec: Spec, params: &Params) -> Scenario {
     let algos = algos();
+    // The new rules activate right after the seed, as at a hard fork.
+    let params = &Params { fork_height: spec.seed.last().expect("empty seed").height, ..params.clone() };
     let jobs = algos.len() * spec.runs;
     eprintln!("scenario {}: {} algorithms x {} runs", spec.id, algos.len(), spec.runs);
     let done = AtomicUsize::new(0);
@@ -155,7 +163,7 @@ fn run_scenario(spec: Spec, params: &Params) -> Scenario {
         let (a, run) = (job / spec.runs, job % spec.runs);
         let mut rng = Rng::new(0x5eed_0000 + run as u64);
         let blocks = sim::run(algos[a].as_ref(), params, spec.seed, spec.end_time, &spec.miners, spec.latency, &mut rng);
-        let summary = summarize(&blocks, &spec.bins, spec.zoom, run == 0, params);
+        let summary = summarize(&blocks, &spec.bins, spec.zoom, run == 0, spec.crash, params);
         eprint!("\r  {}/{jobs}", done.fetch_add(1, Ordering::Relaxed) + 1);
         summary
     });
@@ -167,15 +175,17 @@ fn run_scenario(spec: Spec, params: &Params) -> Scenario {
         .map(|algo| {
             let runs: Vec<_> = outcomes.by_ref().take(spec.runs).collect();
             let mut bins = spec.bins.clone();
-            for (_, b, _) in &runs {
+            for (_, b, _, _) in &runs {
                 bins.merge(b);
             }
-            let metrics: Vec<Metrics> = runs.iter().map(|(m, _, _)| *m).collect();
+            let metrics: Vec<Metrics> = runs.iter().map(|(m, _, _, _)| *m).collect();
+            let recoveries: Vec<Recovery> = runs.iter().filter_map(|(_, _, _, r)| *r).collect();
             AlgoResult {
                 name: algo.name(),
                 metrics: metrics::spread(&metrics),
-                series: series(&bins, None),
-                zoom: runs.into_iter().find_map(|(_, _, z)| z).unwrap_or_default(),
+                series: series(&bins, None, spec.runs),
+                recovery: (!recoveries.is_empty()).then(|| metrics::summarize_recovery(&recoveries)),
+                zoom: runs.into_iter().find_map(|(_, _, z, _)| z).unwrap_or_default(),
             }
         })
         .collect();
@@ -192,6 +202,7 @@ fn run_scenario(spec: Spec, params: &Params) -> Scenario {
         title: spec.title,
         description: spec.description,
         runs: spec.runs,
+        crash: spec.crash,
         hashrate,
         algos: results,
     }
@@ -202,8 +213,9 @@ fn summarize(
     template: &Bins,
     zoom_window: (f64, f64),
     keep_zoom: bool,
+    crash: Option<(f64, f64)>,
     params: &Params,
-) -> (Metrics, Bins, Option<Zoom>) {
+) -> (Metrics, Bins, Option<Zoom>, Option<Recovery>) {
     let times: Vec<f64> = blocks.iter().map(|b| b.time).collect();
     let diffs: Vec<f64> = blocks.iter().map(|b| b.difficulty).collect();
     let m = metrics::compute(&times, &diffs, params.target_spacing as f64);
@@ -219,22 +231,27 @@ fn summarize(
             zoom.hoppers.push(b.hoppers_on);
         }
     }
-    (m, bins, keep_zoom.then_some(zoom))
+    let recovery = crash.map(|(start, end)| {
+        let solvetimes: Vec<f64> = blocks.iter().map(|b| b.solvetime).collect();
+        metrics::recovery(&times, &solvetimes, start, end, params.target_spacing as f64)
+    });
+    (m, bins, keep_zoom.then_some(zoom), recovery)
 }
 
-fn series(bins: &Bins, hashrate: Option<Vec<Option<f64>>>) -> Series {
+fn series(bins: &Bins, hashrate: Option<Vec<Option<f64>>>, runs: usize) -> Series {
     Series {
         start: bins.start,
         width: bins.width,
         solvetime: bins.mean_solvetime(),
         difficulty: bins.mean_difficulty(),
         hashrate: hashrate.unwrap_or_default(),
+        blocks: bins.count.iter().map(|c| c / runs as f64).collect(),
     }
 }
 
 /// Synthetic flat history at exactly T spacing, so pulse/hopper scenarios start in equilibrium.
 fn flat_seed(bits: u32, start: i64, params: &Params) -> Vec<Header> {
-    (0..200).map(|h| Header { height: h, time: start + h as i64 * params.target_spacing, bits }).collect()
+    (0..200).map(|h| Header { height: h, time: start + h as i64 * params.target_spacing, bits, n_tx: 1 }).collect()
 }
 
 pub fn build(headers: &[Header], opts: &Options) -> Report {
@@ -290,9 +307,19 @@ pub fn build(headers: &[Header], opts: &Options) -> Report {
 
     let real = Real {
         metrics: real_metrics,
-        series: series(&real_bins, Some(hashrate_bins.mean_difficulty())),
+        series: series(&real_bins, Some(hashrate_bins.mean_difficulty()), 1),
         histogram: Histogram { bin_width, real: real_hist, exponential },
         zoom,
+        crash: biggest_crash(headers, opts.start_height).map(|height| {
+            // The collapse starts when the last normal block was found.
+            let time = headers[height - 1].time;
+            let hours = headers[height..]
+                .iter()
+                .map(|h| (h.time - time) as f64 / 3600.0)
+                .take_while(|&h| h <= opts.crash_hours + 6.0)
+                .collect();
+            RealCrash { height, time, hours }
+        }),
     };
 
     // Equilibrium hashrate for the synthetic scenarios: whatever matches today's difficulty.
@@ -302,7 +329,7 @@ pub fn build(headers: &[Header], opts: &Options) -> Report {
 
     let replay = Spec {
         latency: opts.latency,
-        id: "replay",
+        id: "replay".into(),
         title: "Replay of the real hashrate".into(),
         description: format!(
             "Hashrate estimated from the real chain ({}-block centered window) drives each algorithm from height {} to the tip. \
@@ -315,13 +342,14 @@ pub fn build(headers: &[Header], opts: &Options) -> Report {
         runs: opts.replay_runs,
         bins: daily.clone(),
         zoom: zoom_window,
+        crash: None,
     };
 
     let pulse_start = t0 + 86_400.0;
     let pulse_end = pulse_start + 4.0 * 3_600.0;
     let pulse = Spec {
         latency: opts.latency,
-        id: "pulse",
+        id: "pulse".into(),
         title: format!("Hashrate pulse: x{} for 4 hours", opts.pulse_factor),
         description: format!(
             "Constant hashrate matching today's difficulty, multiplied by {} for 4 hours and then back. \
@@ -337,11 +365,12 @@ pub fn build(headers: &[Header], opts: &Options) -> Report {
         runs: opts.pulse_runs,
         bins: Bins::new(t0, 600.0, 3 * 144),
         zoom: (pulse_start - 3_600.0, pulse_end + 3.0 * 3_600.0),
+        crash: None,
     };
 
     let hoppers = Spec {
         latency: opts.latency,
-        id: "hoppers",
+        id: "hoppers".into(),
         title: "Profit-switching miners".into(),
         description: format!(
             "Constant base hashrate plus switching miners worth {}x the base, who join while difficulty is below {}x \
@@ -359,9 +388,33 @@ pub fn build(headers: &[Header], opts: &Options) -> Report {
         runs: opts.hopper_runs,
         bins: Bins::new(t0, 3_600.0, 14 * 24),
         zoom: (t0 + 7.0 * 86_400.0, t0 + 7.0 * 86_400.0 + 6.0 * 3_600.0),
+        crash: None,
     };
 
-    let scenarios = [replay, pulse, hoppers].into_iter().map(|s| run_scenario(s, &params)).collect();
+    let crash_start = t0 + 86_400.0;
+    let crash_end = crash_start + opts.crash_hours * 3_600.0;
+    let crashes = opts.crash_factors.iter().map(|&factor| Spec {
+        latency: opts.latency,
+        id: format!("crash-{:.0}", (1.0 - factor) * 100.0),
+        title: format!("Sudden collapse: hashrate x{factor} for {} hours", opts.crash_hours),
+        description: format!(
+            "Constant hashrate matching today's difficulty, then {:.0}% of it disappears at once for {} hours before coming back, \
+             like the real collapse of October 2025. Measures how fast each rule lets the remaining miners find blocks again, \
+             and how big the flood of fast blocks is when the hashrate returns.",
+            (1.0 - factor) * 100.0,
+            opts.crash_hours
+        ),
+        seed: &seed,
+        end_time: crash_end + 12.0 * 3_600.0,
+        miners: Miners::Fixed(Curve::new(vec![f64::MIN, crash_start, crash_end], vec![h0, h0 * factor, h0])),
+        runs: opts.crash_runs,
+        // 10-minute bins from 2 hours before the collapse to 12 hours after the hashrate returns.
+        bins: Bins::new(crash_start - 7_200.0, 600.0, ((opts.crash_hours + 14.0) * 6.0) as usize),
+        zoom: (crash_start - 3_600.0, crash_end + 2.0 * 3_600.0),
+        crash: Some((crash_start, crash_end)),
+    });
+
+    let scenarios = [replay, pulse, hoppers].into_iter().chain(crashes).map(|s| run_scenario(s, &params)).collect();
 
     Report {
         target_spacing: params.target_spacing,
@@ -376,5 +429,6 @@ pub fn build(headers: &[Header], opts: &Options) -> Report {
         },
         real,
         scenarios,
+        superblocks: opts.superblocks.clone(),
     }
 }

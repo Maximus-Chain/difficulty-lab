@@ -141,3 +141,85 @@ impl Bins {
         sums.iter().zip(&self.count).map(|(s, c)| (*c > 0.0).then(|| s / c)).collect()
     }
 }
+
+/// Mean, min and max of one quantity across Monte Carlo runs.
+#[derive(Serialize)]
+pub struct Stat {
+    pub mean: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+impl Stat {
+    pub fn of(values: impl IntoIterator<Item = f64>) -> Self {
+        let v: Vec<f64> = values.into_iter().collect();
+        Self {
+            mean: v.iter().sum::<f64>() / v.len() as f64,
+            min: v.iter().copied().fold(f64::INFINITY, f64::min),
+            max: v.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        }
+    }
+}
+
+/// How one run copes with a hashrate collapse lasting from `start` to `end`.
+#[derive(Clone, Copy)]
+pub struct Recovery {
+    pub blocks_6h: f64,
+    pub blocks_24h: f64,
+    pub longest_gap_min: f64,
+    /// Hours from the collapse until 24 consecutive blocks average under NORMAL_PACE * T again,
+    /// capped at the collapse length when that never happens.
+    pub hours_to_normal: f64,
+    pub recovered: bool,
+    /// Blocks found in the first hour after the hashrate comes back (T-paced would be 3600/T).
+    pub blocks_first_hour_after: f64,
+}
+
+/// A 24-block stretch averaging under this many target spacings counts as a normal pace again.
+/// The mean of 24 exponential solvetimes has a spread of about T/5, so 1.5*T is clearly recovered.
+pub const NORMAL_PACE: f64 = 1.5;
+
+pub fn recovery(times: &[f64], solvetimes: &[f64], start: f64, end: f64, target_spacing: f64) -> Recovery {
+    const WINDOW: usize = 24;
+    let count = |from: f64, to: f64| times.iter().filter(|&&t| t >= from && t < to).count() as f64;
+    let longest = times
+        .iter()
+        .zip(solvetimes)
+        .filter(|&(&t, &s)| t - s < end && t >= start)
+        .map(|(_, &s)| s)
+        .fold(0.0, f64::max);
+    let first = times.partition_point(|&t| t < start);
+    let normal = (first..times.len().saturating_sub(WINDOW))
+        .take_while(|&i| times[i] < end)
+        .find(|&i| times[i + WINDOW] - times[i] < NORMAL_PACE * target_spacing * WINDOW as f64);
+    Recovery {
+        blocks_6h: count(start, start + 6.0 * 3600.0),
+        blocks_24h: count(start, start + 24.0 * 3600.0),
+        longest_gap_min: longest / 60.0,
+        hours_to_normal: normal.map_or(end - start, |i| times[i] - start) / 3600.0,
+        recovered: normal.is_some(),
+        blocks_first_hour_after: count(end, end + 3600.0),
+    }
+}
+
+#[derive(Serialize)]
+pub struct RecoverySummary {
+    pub blocks_6h: Stat,
+    pub blocks_24h: Stat,
+    pub longest_gap_min: Stat,
+    pub hours_to_normal: Stat,
+    /// Share of runs that got back to a normal pace before the hashrate returned.
+    pub recovered_pct: f64,
+    pub blocks_first_hour_after: Stat,
+}
+
+pub fn summarize_recovery(runs: &[Recovery]) -> RecoverySummary {
+    RecoverySummary {
+        blocks_6h: Stat::of(runs.iter().map(|r| r.blocks_6h)),
+        blocks_24h: Stat::of(runs.iter().map(|r| r.blocks_24h)),
+        longest_gap_min: Stat::of(runs.iter().map(|r| r.longest_gap_min)),
+        hours_to_normal: Stat::of(runs.iter().map(|r| r.hours_to_normal)),
+        recovered_pct: 100.0 * runs.iter().filter(|r| r.recovered).count() as f64 / runs.len() as f64,
+        blocks_first_hour_after: Stat::of(runs.iter().map(|r| r.blocks_first_hour_after)),
+    }
+}

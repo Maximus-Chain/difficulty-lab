@@ -15,8 +15,10 @@
   --grid: #eceff3;
   --shade: rgba(42, 120, 214, 0.08);
   --hopper: rgba(235, 104, 52, 0.12);
+  --bad: #c0322b;
   --s-real: #3d4450;
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
+  --s7: #7b4fd6; --s8: #0b8ea0; --s9: #8a6d00;
   --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --body: "Public Sans", "Segoe UI", Roboto, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -24,17 +26,17 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #111317; --surface: #191c21; --ink: #eef0f3; --ink-2: #b7bdc7; --muted: #8d95a1;
-    --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16);
+    --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a;
     --s-real: #c9ced6;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #111317; --surface: #191c21; --ink: #eef0f3; --ink-2: #b7bdc7; --muted: #8d95a1;
-  --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16);
+  --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a;
   --s-real: #c9ced6;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -105,8 +107,10 @@ th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--rul
 th { white-space: normal; min-width: 64px; }
 th { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); vertical-align: bottom; }
 th:first-child, td:first-child { text-align: left; }
+th .rng { display: block; font: 10px var(--mono); color: var(--muted); text-transform: none; letter-spacing: 0; margin-top: 2px; }
 td .rng { display: block; font: 11px var(--mono); color: var(--muted); }
 td .name { display: inline-flex; gap: 8px; align-items: center; font-weight: 600; }
+td.bad { color: var(--bad); font-weight: 600; }
 td .name i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
 tr.real td { background: var(--grid); }
 .note { font-size: 13px; color: var(--muted); }
@@ -119,7 +123,7 @@ code { font: 12.5px var(--mono); background: var(--grid); padding: 1px 5px; bord
   <header>
     <span class="eyebrow">Maximus mainnet · difficulty adjustment study</span>
     <h1>Maximus Difficulty Lab</h1>
-    <p class="lede">The current Dark Gravity Wave (DGW v3) compared with LWMA-1 at several window sizes, replayed on the real chain and stress-tested with synthetic hashrate patterns. Every simulated algorithm is the same code that reproduces mainnet's own nBits.</p>
+    <p class="lede">The current Dark Gravity Wave (DGW v3) compared with LWMA-1 and with ASERT (aserti3-2d, Bitcoin Cash's rule since 2020) at several window sizes, replayed on the real chain and stress-tested with synthetic hashrate patterns. Every simulated algorithm is the same code that reproduces mainnet's own nBits.</p>
     <div class="facts" id="facts"></div>
     <p class="notice" role="note"><b>Research only.</b> No change to the difficulty algorithm or to emission has been decided. Any such change would be a hard fork, announced well in advance with an activation height and an upgrade window for pools, exchanges and node operators.</p>
   </header>
@@ -154,6 +158,9 @@ code { font: 12.5px var(--mono); background: var(--grid); padding: 1px 5px; bord
   <section id="replay"></section>
   <section id="pulse"></section>
   <section id="hoppers"></section>
+  <section id="crash-summary"></section>
+  <div id="crash-sections" style="display:contents"></div>
+  <section id="superblocks" hidden></section>
 
   <section>
     <div class="section-head">
@@ -163,7 +170,7 @@ code { font: 12.5px var(--mono); background: var(--grid); padding: 1px 5px; bord
     <div class="note" style="display:flex;flex-direction:column;gap:10px;max-width:72ch">
       <p>Headers (height, timestamp, nBits) were exported from a mainnet node with <code>getblockheaders</code>. A Rust port of <code>DarkGravityWave()</code> from <code>src/pow.cpp</code> recomputes every block's nBits from its predecessors and must match the chain exactly before any simulation runs.</p>
       <p>Each simulated block draws its work from an exponential distribution and is solved against the hashrate in force at that moment. Miners lose <span id="m-lat"></span> s of work after every block to propagation and template switching. That is calibrated so that the DGW replay matches the real chain's mean, tail and burst counts.</p>
-      <p>The replay assumes miners would have behaved the same under another algorithm. Treat it as a like-for-like comparison, not a forecast. LWMA-1 follows zawy12's reference implementation, including the 6·T solvetime cap and the out-of-order timestamp handling.</p>
+      <p>The replay assumes miners would have behaved the same under another algorithm. Treat it as a like-for-like comparison, not a forecast. LWMA-1 follows zawy12's reference implementation, including the 6·T solvetime cap and the out-of-order timestamp handling. ASERT is a port of Bitcoin Cash's integer <code>aserti3-2d</code>; τ is its mean lifetime in blocks (half-life τ·T·ln 2, so τ=36 is a 30-minute half-life), anchored at the block just before the simulated switch, as at a hard fork.</p>
       <p>Regenerate with <code>cargo run --release -- extract</code> then <code>cargo run --release -- simulate</code>.</p>
     </div>
   </section>
@@ -181,6 +188,9 @@ const ALGOS = [
   { name: "LWMA-1 N=24", short: "LWMA N=24", color: "--s4", on: false },
   { name: "LWMA-1 N=45", short: "LWMA N=45", color: "--s5", on: false },
   { name: "LWMA-1 N=90", short: "LWMA N=90", color: "--s6", on: false },
+  { name: "ASERT tau=36", short: "ASERT τ=36", color: "--s7", on: true },
+  { name: "ASERT tau=24", short: "ASERT τ=24", color: "--s8", on: false },
+  { name: "ASERT tau=72", short: "ASERT τ=72", color: "--s9", on: false },
 ];
 const REAL = { name: "Real", short: "Real chain", color: "--s-real" };
 const T = REPORT.target_spacing;
@@ -462,6 +472,8 @@ document.getElementById("findings").innerHTML = [
   [fmt(R.real.metrics.pct_over_5t, 2) + "%", `of real blocks take longer than 5·T. Pure luck at the same mean gives ${fmt(expOver, 2)}%, so most slow blocks are the lottery, not the algorithm.`],
   [fmt(dgwR.gaps_over_7min_per_day, 1) + " → " + fmt(lwR.gaps_over_7min_per_day, 1), `gaps over 7 minutes per day in the replay, DGW v3 versus LWMA N=60. Part of the drop comes simply from LWMA running at the true 72 s.`],
   [fmt(dgwH.gaps_over_7min_per_day, 1) + " → " + fmt(lwH.gaps_over_7min_per_day, 1), `7-minute gaps per day when profit-switching miners come and go. This is where LWMA helps most.`],
+  (() => { const c = sc("crash-99"), h = n => c && c.algos.find(x => x.name === n).recovery.hours_to_normal.mean;
+     return [fmt(h("DGW v3"), 1) + " / " + fmt(h("LWMA-1 N=60"), 1) + " / " + fmt(h("ASERT tau=36"), 1) + " h", `to get back to a normal pace after 99% of the hashrate leaves at once: DGW v3, LWMA N=60 and ASERT τ=36. ASERT lowers difficulty with elapsed time, not block by block.`]; })(),
   [fmt(lwR.blocks_per_day - dgwR.blocks_per_day, 0) + " / day", `extra blocks if block time moves to the true target: emission per day rises by about ${fmt((lwR.blocks_per_day / dgwR.blocks_per_day - 1) * 100, 1)}% and every block-counted cycle gets shorter in days.`],
 ].map(([big, txt]) => `<div class="finding"><span class="big">${big}</span><p>${txt}</p></div>`).join("");
 
@@ -516,9 +528,11 @@ function scenarioSection(id, opts) {
     <div class="card"><div class="card-head"><h3>${opts.chartTitle}</h3><p>${opts.chartSub}</p></div><div class="legend" data-legend></div><div class="chart" data-main></div></div>
     ${opts.second ? `<div class="card"><div class="card-head"><h3>${opts.second.title}</h3><p>${opts.second.sub}</p></div><div class="chart" data-second></div></div>` : ""}
     <div class="card"><div class="card-head"><h3>${opts.zoomTitle}</h3><p>${opts.zoomSub}</p></div><div class="tabs" role="tablist" data-tabs></div><div class="chart" data-zoom></div></div>
+    ${opts.extra ? opts.extra.html : ""}
     <div class="card" style="padding-bottom:4px">${metricsTable(s, opts.withReal)}</div>
     ${opts.note ? `<p class="note">${opts.note}</p>` : ""}`;
   seriesLegend(host.querySelector("[data-legend]"), opts.withReal);
+  if (opts.extra) opts.extra.render(host, s);
   const ref = s.algos[0].series;
   const xs = binX(ref);
   lineChart(host.querySelector("[data-main]"), () => ({
@@ -526,8 +540,9 @@ function scenarioSection(id, opts) {
     series: [...(opts.withReal ? [{ name: "real", label: REAL.short, color: REAL.color, values: smooth(R.real.series.solvetime, opts.smooth || 0), width: 1.5 }] : []),
              ...algoSeries(s, "solvetime").map(x => ({ ...x, values: smooth(x.values, opts.smooth || 0) }))],
     refs: [{ y: T, label: `target ${T} s` }],
-    bands: opts.bands, xFmt: opts.xFmt, xTipFmt: opts.xTipFmt, xTicks: opts.xTicks,
-    yFmt: v => fmt(v, 0) + " s", yTipFmt: v => fmt(v, 1) + " s", yMax: opts.yMax,
+    bands: opts.bands, xFmt: opts.xFmt, xTipFmt: opts.xTipFmt, xTicks: opts.xTicks, log: opts.log,
+    yFmt: opts.log ? v => v >= 3600 ? fmt(v / 3600, 0) + " h" : v >= 60 ? fmt(v / 60, 0) + " min" : fmt(v, 0) + " s" : v => fmt(v, 0) + " s",
+    yTipFmt: v => v >= 600 ? fmt(v / 60, 1) + " min" : fmt(v, 1) + " s", yMax: opts.yMax,
   }));
   if (opts.second) {
     lineChart(host.querySelector("[data-second]"), () => ({
@@ -590,6 +605,147 @@ scenarioSection("hoppers", {
   zoomStart: z => z.time[0] - z.solvetime[0], zoomSpan: 6 * 3600,
   note: "Switching miners join while difficulty is cheap and leave once it catches up. The base miners are then left with a high difficulty, which produces the long gaps, and the bursts come when the switchers return. A faster, smoother rule shortens both phases.",
 });
+
+/* ---------- sudden collapse ---------- */
+const NORMAL_PACE = 1.5;
+const crashScenarios = R.scenarios.filter(s => s.id.startsWith("crash-"));
+const crashPct = s => +s.id.slice(6);
+function crashSection(crash, withReal) {
+  const [cStart, cEnd] = crash.crash;
+  const hoursOf = t => (t - cStart) / 3600;
+  const ref = crash.algos[0].series;
+  const xs = binX(ref);
+  const binEnds = xs.map(x => hoursOf(x + ref.width / 2));
+  const cumulative = blocks => { let acc = 0; return blocks.map((b, i) => (binEnds[i] <= 0 ? null : (acc += b))); };
+  const realCrash = withReal ? R.real.crash : null;
+  const realLast = realCrash && realCrash.hours[realCrash.hours.length - 1];
+  const realCum = realCrash && binEnds.map(h => (h <= 0 || h > realLast ? null : realCrash.hours.filter(x => x <= h).length));
+  const crashHours = hoursOf(cEnd);
+  const ideal = binEnds.map(h => (h <= 0 ? null : h * 3600 / T));
+
+  // Recovery numbers measured on the real collapse the same way the simulator measures them.
+  let realRec = null;
+  if (realCrash) {
+    const h = realCrash.hours, W = 24;
+    let gap = h[0];
+    for (let i = 1; i < h.length; i++) gap = Math.max(gap, h[i] - h[i - 1]);
+    let normal = null;
+    for (let i = 0; i + W < h.length; i++) if ((h[i + W] - h[i]) * 3600 < NORMAL_PACE * T * W) { normal = h[i]; break; }
+    realRec = { blocks_6h: h.filter(x => x < 6).length, blocks_24h: h.filter(x => x < 24).length, longest_gap_min: gap * 60, hours_to_normal: normal };
+  }
+  const recCols = [
+    ["blocks_6h", "Blocks in first 6 h", v => fmt(v, 0), `${6 * 3600 / T} at target pace`],
+    ["blocks_24h", "Blocks in first 24 h", v => fmt(v, 0), `${24 * 3600 / T} at target pace`],
+    ["longest_gap_min", "Longest gap", v => v >= 60 ? fmt(v / 60, 1) + " h" : fmt(v, 0) + " min"],
+    ["hours_to_normal", "Hours to normal pace", v => fmt(v, 1) + " h", `24 blocks averaging under ${NORMAL_PACE}·T`],
+    ["blocks_first_hour_after", "Blocks in first hour after return", v => fmt(v, 0), `${3600 / T} at target pace`],
+  ];
+  const recTable = () => {
+    const head = `<tr><th>Algorithm</th>${recCols.map(c => `<th>${c[1]}${c[3] ? `<span class="rng">${c[3]}</span>` : ""}</th>`).join("")}</tr>`;
+    const rows = [];
+    if (realRec) rows.push(`<tr class="real"><td><span class="name" style="--c:${cssVar(REAL.color)}"><i></i>Real, Oct 2025</span></td>` +
+      recCols.map(([k, , f]) => `<td>${realRec[k] == null ? "–" : f(realRec[k])}</td>`).join("") + "</tr>");
+    for (const a of ALGOS) {
+      const r = crash.algos.find(x => x.name === a.name);
+      if (!r || !r.recovery) continue;
+      rows.push(`<tr><td><span class="name" style="--c:${cssVar(a.color)}"><i></i>${a.short}</span></td>` +
+        recCols.map(([k, , f]) => {
+          const st = r.recovery[k];
+          const miss = k === "hours_to_normal" && r.recovery.recovered_pct < 100 ? `<span class="rng">${fmt(100 - r.recovery.recovered_pct, 0)}% of runs never got there</span>` : "";
+          return `<td>${f(st.mean)}<span class="rng">${f(st.min)} – ${f(st.max)}</span>${miss}</td>`;
+        }).join("") + "</tr>");
+    }
+    return `<div class="table-wrap"><table><thead>${head}</thead><tbody>${rows.join("")}</tbody></table></div>`;
+  };
+  const xFmtH = v => { const h = Math.round(hoursOf(v)); return (h >= 0 ? "+" : "") + h + "h"; };
+  const xTicksH = () => { const t = []; for (let h = 0; h <= crashHours + 12; h += 6) t.push(cStart + h * 3600); return t; };
+
+  const host = el("section", { id: crash.id });
+  document.getElementById("crash-sections").append(host);
+  scenarioSection(crash.id, {
+    heading: `${crashPct(crash)}% of the hashrate disappears at once`,
+    chartTitle: "Mean block time", chartSub: "10-minute bins, averaged over all runs, log scale; shaded = hashrate gone",
+    log: true, smooth: 1,
+    bands: [{ from: cStart, to: cEnd, fill: "var(--shade)" }],
+    xFmt: xFmtH, xTipFmt: v => fmt(hoursOf(v), 1) + " h from the collapse", xTicks: xTicksH,
+    second: null,
+    extra: {
+      html: `<div class="card"><div class="card-head"><h3>Blocks found since the collapse</h3><p>mean over all runs${realCrash ? `; the real chain is the October 2025 collapse at block #${realCrash.height.toLocaleString("en-US")}` : ""}</p></div><div class="legend" data-cum-legend></div><div class="chart" data-cum></div></div>
+             <div class="card" style="padding-bottom:4px">${recTable()}</div>`,
+      render: host => {
+        const lg = host.querySelector("[data-cum-legend]");
+        const drawLegend = () => legend(lg, [{ label: "Target pace", color: "--muted", kind: "dash" }, ...(realCrash ? [{ label: "Real, Oct 2025", color: REAL.color }] : []),
+          ...ALGOS.filter(a => visible.has(a.name)).map(a => ({ label: a.short, color: a.color }))]);
+        redrawers.push(drawLegend); drawLegend();
+        lineChart(host.querySelector("[data-cum]"), () => ({
+          x: xs, height: 280, aria: "Cumulative blocks found since the hashrate collapse",
+          series: [{ name: "ideal", label: "Target pace", color: "--muted", values: ideal, dash: "3 4", width: 1.5 },
+                   ...(realCum ? [{ name: "real", label: "Real, Oct 2025", color: REAL.color, values: realCum, width: 1.5 }] : []),
+                   ...algoSeries(crash, "blocks").map(x => ({ ...x, values: cumulative(x.values) }))],
+          yMax: 1.15 * Math.max(...crash.algos.map(a => cumulative(a.series.blocks).filter(v => v != null).pop()), realCum ? Math.max(...realCum.filter(v => v != null)) : 0),
+          bands: [{ from: cStart, to: cEnd, fill: "var(--shade)" }], xFmt: xFmtH, xTipFmt: v => fmt(hoursOf(v + ref.width / 2), 1) + " h from the collapse", xTicks: xTicksH,
+          yFmt: v => fmt(v, 0), yTipFmt: v => fmt(v, 0) + " blocks", yMin: 0,
+        }));
+      },
+    },
+    zoomTitle: "One run, block by block", zoomSub: "from 1 h before the collapse to 2 h after the hashrate returns",
+    zoomStart: () => cStart - 3600, zoomSpan: crashHours * 3600 + 3 * 3600,
+    note: withReal ? `With most of the hashrate gone, every rule first has to wait for a block at the old difficulty, which takes hours. DGW and LWMA then lower difficulty block by block, and LWMA counts each slow block as at most 6·T, so a long LWMA window needs many hours. ASERT lowers difficulty with elapsed time instead, so it is back to a normal pace soonest. Its price shows when the miners return: ASERT has to win back the blocks the chain fell behind schedule, about τ·ln(1/0.01) of them, so it produces a burst of fast blocks in the following hour.` : "",
+  });
+}
+{
+  // Summary across collapse sizes: where a longer window starts to hurt.
+  const sizes = [...crashScenarios].sort((a, b) => crashPct(a) - crashPct(b));
+  const cols = [
+    ["hours_to_normal", "Hours to normal pace", v => fmt(v, 1) + " h"],
+    ["blocks_6h", `Blocks in first 6 h (target ${6 * 3600 / T})`, v => fmt(v, 0)],
+    ["blocks_first_hour_after", `Blocks in first hour after return (target ${3600 / T})`, v => fmt(v, 0)],
+  ];
+  const head1 = `<tr><th rowspan="2">Algorithm</th>${cols.map(c => `<th colspan="${sizes.length}" style="text-align:center">${c[1]}</th>`).join("")}</tr>`;
+  const head2 = `<tr>${cols.map(() => sizes.map(s => `<th>−${crashPct(s)}%</th>`).join("")).join("")}</tr>`;
+  const body = ALGOS.map(a => `<tr><td><span class="name" style="--c:${cssVar(a.color)}"><i></i>${a.short}</span></td>` +
+    cols.map(([k, , f]) => sizes.map(s => { const r = s.algos.find(x => x.name === a.name); return `<td>${r ? f(r.recovery[k].mean) : "–"}</td>`; }).join("")).join("") + "</tr>").join("");
+  document.getElementById("crash-summary").innerHTML = `
+    <div class="section-head">
+      <span class="eyebrow">Scenario · ${sizes[0].runs} runs per algorithm and size</span>
+      <h2>How big does a hashrate collapse have to be before the window length matters?</h2>
+      <p>The same collapse at three sizes: ${sizes.map(s => crashPct(s) + "%").join(", ")} of the hashrate leaves at once for ${fmt((sizes[0].crash[1] - sizes[0].crash[0]) / 3600, 0)} hours, then comes back. Means over all runs; the sections below show each size in detail.</p>
+    </div>
+    <div class="card" style="padding-bottom:4px"><div class="table-wrap"><table><thead>${head1}${head2}</thead><tbody>${body}</tbody></table></div></div>
+    <p class="note">Losing half the miners barely matters to any rule. At 80% the slower rules cost an hour or two of slow blocks. Only a near-total collapse separates the rules by many hours, and that is the case Maximus has actually lived through: there ASERT recovers in less than half the time of DGW, while LWMA N=60 takes more than twice as long. In exchange ASERT releases a larger burst of fast blocks when the miners come back.</p>`;
+  for (const s of [...sizes].reverse()) crashSection(s, crashPct(s) >= 99);
+}
+
+/* ---------- superblocks ---------- */
+if (R.superblocks) {
+  const SB = R.superblocks.superblocks;
+  const host = document.getElementById("superblocks");
+  host.hidden = false;
+  const took = s => s >= 600 ? fmt(s / 3600, 1) + " h" : s + " s";
+  const odd = SB.filter(b => !b.paid && b.proposals_in_cycle.length);
+  const empty = SB.filter(b => !b.paid && !b.proposals_in_cycle.length);
+  const rows = SB.map(b => `<tr><td>#${b.height.toLocaleString("en-US")}</td><td>${dateFmt(b.time)}</td><td class="${b.solvetime >= 3600 ? "bad" : ""}">${took(b.solvetime)}</td>` +
+    `<td class="${!b.paid && b.proposals_in_cycle.length ? "bad" : ""}">${b.paid ? fmt(b.budget_paid, 2) : "not paid"}</td><td>${fmt(b.budget_available, 2)}</td><td>${b.proposals_in_cycle.length}</td>` +
+    `<td style="text-align:left;white-space:normal">${b.coinbase_tag || "–"}</td></tr>`).join("");
+  const N = R.superblocks.next;
+  const nextHtml = N ? `<div class="card"><div class="card-head"><h3>Next superblock: #${N.height.toLocaleString("en-US")}</h3><p>as seen by the node when the audit ran; budget ${fmt(N.budget, 8)} MAXI, ${N.funding_threshold} yes votes needed, ${N.masternodes_enabled} masternodes enabled</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Object</th><th>Amount (MAXI)</th><th>Yes</th><th>No</th><th>Funded</th><th>Fits budget</th></tr></thead><tbody>` +
+    N.objects.map(o => `<tr><td>${o.kind}: ${o.name}</td><td>${fmt(o.amount, 8)}</td><td>${o.yes}</td><td>${o.no}</td><td>${o.funded ? "yes" : "no"}</td><td class="${o.amount > N.budget ? "bad" : ""}">${o.amount > N.budget ? "over budget" : "yes"}</td></tr>`).join("") +
+    `</tbody></table></div></div>` : "";
+  host.innerHTML = `
+    <div class="section-head">
+      <span class="eyebrow">Real chain · governance</span>
+      <h2>Superblocks: the blocks that pay the treasury</h2>
+      <p>Every ${(36000).toLocaleString("en-US")} blocks the coinbase may also pay the governance proposals that won their vote. Once masternodes have a funded payment trigger for that height, a block that does not pay it exactly is invalid, so a pool whose template disagrees cannot get its blocks accepted. Triggers and votes are not stored on-chain; the evidence left is the coinbase itself and each proposal's 1 MAXI collateral.</p>
+    </div>
+    <div class="card" style="padding-bottom:4px"><div class="table-wrap"><table>
+      <thead><tr><th>Height</th><th>Date</th><th>Block time</th><th>Budget paid (MAXI)</th><th>Budget allowed</th><th>Proposals in cycle</th><th style="text-align:left">Coinbase tag</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>
+    ${nextHtml}
+    <p class="note">${empty.length} superblocks (${empty.map(b => "#" + b.height.toLocaleString("en-US")).join(", ")}) paid nothing because no proposal was submitted in their cycle; that is expected and the unused budget is simply never minted. ` +
+    `${odd.map(b => `#${b.height.toLocaleString("en-US")} is different: a proposal was submitted ${(b.height - b.proposals_in_cycle[0].height).toLocaleString("en-US")} blocks earlier, the block took ${took(b.solvetime)} with normal hashrate around it, and in the end nothing was paid. It was also the first cycle in which the budget dropped (${fmt(SB[0].budget_available, 2)} → ${fmt(b.budget_available, 2)} MAXI), so a proposal or trigger still asking for the old amount would have made every block paying it invalid. The triggers are gone, so this stays a hypothesis.`).join(" ")} ` +
+    `No difficulty rule can fix a block the network refuses as invalid.</p>`;
+}
 
 document.getElementById("footer").innerHTML = `<span>Generated by difficulty-lab from mainnet headers up to block #${R.tip_height.toLocaleString("en-US")}.</span>`;
 </script>

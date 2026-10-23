@@ -7,11 +7,16 @@ use crate::target::{from_compact, to_compact};
 use primitive_types::U256;
 
 /// Mainnet consensus parameters (src/chainparams.cpp).
+#[derive(Clone)]
 pub struct Params {
     pub pow_limit: U256,
     pub target_spacing: i64,
     pub target_timespan: i64,
     pub dgw_height: u32,
+    /// Height of the last block mined under the current rule. Algorithms that need an anchor
+    /// (ASERT) start from it, as they would at a hard fork; the simulator sets it to the last
+    /// seeded block.
+    pub fork_height: u32,
 }
 
 impl Params {
@@ -21,6 +26,7 @@ impl Params {
             target_spacing: 72,
             target_timespan: 24 * 60 * 60,
             dgw_height: 60,
+            fork_height: u32::MAX,
         }
     }
 }
@@ -136,6 +142,59 @@ impl DifficultyAlgo for Lwma {
     }
 }
 
+/// aserti3-2d, Bitcoin Cash's DAA since November 2020: a port of `GetNextASERTWorkRequired`
+/// (Bitcoin ABC / BCHN `src/pow/aserti32d.cpp`) with the same integer arithmetic.
+/// Difficulty follows an exponential of how far the chain is ahead of or behind an ideal
+/// schedule anchored at the fork block, so it falls with wall-clock time, without a per-block cap.
+pub struct Asert {
+    /// Mean lifetime in blocks: the half-life is `tau * T * ln 2` seconds.
+    pub tau: u32,
+}
+
+impl Asert {
+    pub fn half_life(&self, params: &Params) -> i64 {
+        (self.tau as f64 * params.target_spacing as f64 * std::f64::consts::LN_2).round() as i64
+    }
+}
+
+impl DifficultyAlgo for Asert {
+    fn name(&self) -> String {
+        format!("ASERT tau={}", self.tau)
+    }
+
+    fn next_bits(&self, chain: &[Header], params: &Params) -> u32 {
+        let last = chain.last().expect("empty chain");
+        let fork = params.fork_height as usize;
+        if last.height < params.fork_height || fork == 0 || fork >= chain.len() {
+            return Dgw::CURRENT.next_bits(chain, params);
+        }
+        let anchor = &chain[fork];
+        let anchor_parent_time = chain[fork - 1].time;
+        let height_diff = (last.height - anchor.height) as i64;
+        let time_diff = last.time - anchor_parent_time;
+        let half_life = self.half_life(params);
+
+        // 16.16 fixed-point exponent; Rust's `/` truncates towards zero like C++.
+        let exponent = ((time_diff - params.target_spacing * (height_diff + 1)) * 65536) / half_life;
+        let mut shifts = exponent >> 16;
+        let frac = (exponent & 0xffff) as u128;
+        // Cubic approximation of 2^frac on [0, 1), error under 0.013%.
+        let factor = 65536 + ((195_766_423_245_049 * frac + 971_821_376 * frac * frac + 5127 * frac * frac * frac + (1u128 << 47)) >> 48);
+        let mut next = from_compact(anchor.bits) * U256::from(factor as u64);
+        shifts -= 16;
+        if shifts <= 0 {
+            next = next >> (-shifts).min(255) as usize;
+        } else {
+            let shifted = next << shifts as usize;
+            next = if shifts >= 256 || shifted >> shifts as usize != next { params.pow_limit } else { shifted };
+        }
+        if next.is_zero() {
+            next = U256::one();
+        }
+        to_compact(next.min(params.pow_limit))
+    }
+}
+
 /// Recomputes every block's nBits from its predecessors with the mainnet rule and returns the
 /// heights where the result differs from the chain as (height, computed, actual).
 pub fn mismatches(headers: &[Header], params: &Params) -> Vec<(usize, u32, u32)> {
@@ -145,4 +204,36 @@ pub fn mismatches(headers: &[Header], params: &Params) -> Vec<(usize, u32, u32)>
             (computed != headers[h].bits).then_some((h, computed, headers[h].bits))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn flat_chain(n: u32, spacing: i64, bits: u32) -> Vec<Header> {
+        (0..n).map(|h| Header { height: h, time: 1_000_000 + h as i64 * spacing, bits, n_tx: 1 }).collect()
+    }
+
+    #[test]
+    fn asert_keeps_difficulty_on_schedule() {
+        let mut params = Params::mainnet();
+        let bits = to_compact(params.pow_limit >> 12);
+        let chain = flat_chain(300, params.target_spacing, bits);
+        params.fork_height = 100;
+        assert_eq!(Asert { tau: 36 }.next_bits(&chain, &params), bits);
+    }
+
+    #[test]
+    fn asert_halves_difficulty_per_half_life_behind() {
+        let mut params = Params::mainnet();
+        let bits = to_compact(params.pow_limit >> 12);
+        let mut chain = flat_chain(200, params.target_spacing, bits);
+        params.fork_height = 100;
+        let algo = Asert { tau: 36 };
+        // The tip is exactly one half-life late: the target doubles.
+        chain.last_mut().unwrap().time += algo.half_life(&params);
+        let next = from_compact(algo.next_bits(&chain, &params));
+        let ratio = (next >> 192).low_u64() as f64 / (from_compact(bits) >> 192).low_u64() as f64;
+        assert!((ratio - 2.0).abs() < 0.001, "ratio {ratio}");
+    }
 }

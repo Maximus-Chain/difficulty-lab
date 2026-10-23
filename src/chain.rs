@@ -1,4 +1,4 @@
-//! Minimal block headers (height, timestamp, nBits) and their CSV format.
+//! Minimal block headers (height, timestamp, nBits, transaction count) and their CSV format.
 
 use anyhow::{Context, Result, bail};
 use std::fs::File;
@@ -10,13 +10,15 @@ pub struct Header {
     pub height: u32,
     pub time: i64,
     pub bits: u32,
+    /// Transactions in the block, coinbase included. Simulated blocks use 1.
+    pub n_tx: u32,
 }
 
 pub fn write_csv(path: &Path, headers: &[Header]) -> Result<()> {
     let mut out = BufWriter::new(File::create(path)?);
-    writeln!(out, "height,time,bits")?;
+    writeln!(out, "height,time,bits,n_tx")?;
     for h in headers {
-        writeln!(out, "{},{},{:08x}", h.height, h.time, h.bits)?;
+        writeln!(out, "{},{},{:08x},{}", h.height, h.time, h.bits, h.n_tx)?;
     }
     Ok(())
 }
@@ -33,6 +35,7 @@ pub fn read_csv(path: &Path) -> Result<Vec<Header>> {
             height: next()?.parse()?,
             time: next()?.parse()?,
             bits: u32::from_str_radix(next()?, 16)?,
+            n_tx: next()?.parse()?,
         };
         if header.height as usize != headers.len() {
             bail!("height {} out of order at line {}", header.height, i + 1);
