@@ -1,6 +1,6 @@
 # difficulty-lab
 
-Difficulty-algorithm simulator for Maximus mainnet: compares the current Dark Gravity Wave (DGW v3) with LWMA-1 and ASERT (aserti3-2d) at several window sizes.
+Difficulty-algorithm simulator for Maximus mainnet: compares the current Dark Gravity Wave (DGW v3) with a corrected DGW, LWMA-1, ASERT (aserti3-2d) and WTEMA at several window sizes.
 
 > **Research only.** No change to the difficulty algorithm or to emission has been decided. Any such change would be a hard fork, announced well in advance with an activation height and an upgrade window for pools, exchanges and node operators.
 
@@ -31,7 +31,7 @@ The published report lives in `docs/index.html` (served by GitHub Pages). Refres
 
 ## How it works
 
-- `src/algo.rs`: the difficulty rules behind one trait. `Dgw` is a literal port of `DarkGravityWave()` from `src/pow.cpp` and matches all mainnet blocks bit for bit. `Lwma` follows zawy12's LWMA-1 reference. `Asert` ports Bitcoin Cash's integer aserti3-2d, anchored at the last block before the simulated switch.
+- `src/algo.rs`: the difficulty rules behind one trait. `Dgw` is a literal port of `DarkGravityWave()` from `src/pow.cpp` and matches all mainnet blocks bit for bit; its flags fix the off-by-one timespan and the biased target average (`Dgw::CORRECTED` fixes both). `Lwma` follows zawy12's LWMA-1 reference. `Asert` ports Bitcoin Cash's integer aserti3-2d, anchored at the last block before the simulated switch. `Wtema` is the relative, per-block form of the same exponential filter.
 - `src/hashrate.rs`: estimates the network hashrate from the real chain (centered window of N blocks) and builds hashrate curves over time.
 - `src/sim.rs`: Monte Carlo block production. Each block's work is exponentially distributed and is solved against the hashrate in force, with a fixed latency after each block for propagation and template switching.
 - `src/report.rs`: four scenarios (replay of the real hashrate, a 4-hour hashrate pulse, profit-switching miners, sudden hashrate collapses of 50%, 80% and 99%) run for every algorithm in parallel. The 99% collapse is compared with the real one of October 2025.

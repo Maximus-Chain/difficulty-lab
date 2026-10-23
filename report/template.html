@@ -18,7 +18,7 @@
   --bad: #c0322b;
   --s-real: #3d4450;
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
-  --s7: #7b4fd6; --s8: #0b8ea0; --s9: #8a6d00;
+  --s7: #7b4fd6; --s8: #0b8ea0; --s9: #8a6d00; --s10: #a8452a; --s11: #4e6278;
   --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --body: "Public Sans", "Segoe UI", Roboto, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -28,7 +28,7 @@
     --bg: #111317; --surface: #191c21; --ink: #eef0f3; --ink-2: #b7bdc7; --muted: #8d95a1;
     --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a;
     --s-real: #c9ced6;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a; --s10: #d97a5c; --s11: #8ea3ba;
     color-scheme: dark;
   }
 }
@@ -36,7 +36,7 @@
   --bg: #111317; --surface: #191c21; --ink: #eef0f3; --ink-2: #b7bdc7; --muted: #8d95a1;
   --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a;
   --s-real: #c9ced6;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a; --s10: #d97a5c; --s11: #8ea3ba;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -191,6 +191,8 @@ const ALGOS = [
   { name: "ASERT tau=36", short: "ASERT τ=36", color: "--s7", on: true },
   { name: "ASERT tau=24", short: "ASERT τ=24", color: "--s8", on: false },
   { name: "ASERT tau=72", short: "ASERT τ=72", color: "--s9", on: false },
+  { name: "DGW v3 (corrected)", short: "DGW corrected", color: "--s10", on: false },
+  { name: "WTEMA M=36", short: "WTEMA M=36", color: "--s11", on: false },
 ];
 const REAL = { name: "Real", short: "Real chain", color: "--s-real" };
 const T = REPORT.target_spacing;

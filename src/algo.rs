@@ -67,19 +67,29 @@ fn btc_next_bits(chain: &[Header], params: &Params) -> u32 {
 /// Dark Gravity Wave v3, a literal port of src/pow.cpp including its biased "average".
 /// With `fix_timespan`, the window's 23 measured intervals are compared against 23*T instead of
 /// 24*T (the off-by-one flagged in pow.cpp), which is what makes mainnet blocks ~5% slow.
+/// With `fix_average`, the 24 targets are averaged with equal weights; pow.cpp's running formula
+/// counts the most recent target twice.
 pub struct Dgw {
     pub fix_timespan: bool,
+    pub fix_average: bool,
 }
 
 impl Dgw {
-    pub const CURRENT: Dgw = Dgw { fix_timespan: false };
+    pub const CURRENT: Dgw = Dgw { fix_timespan: false, fix_average: false };
+    /// Both bugs fixed, clamps kept: the minimal change to the current rule.
+    pub const CORRECTED: Dgw = Dgw { fix_timespan: true, fix_average: true };
 }
 
 const DGW_PAST_BLOCKS: usize = 24;
 
 impl DifficultyAlgo for Dgw {
     fn name(&self) -> String {
-        if self.fix_timespan { "DGW v3 (fixed timespan)".into() } else { "DGW v3".into() }
+        match (self.fix_timespan, self.fix_average) {
+            (false, false) => "DGW v3".into(),
+            (true, false) => "DGW v3 (fixed timespan)".into(),
+            (false, true) => "DGW v3 (fixed average)".into(),
+            (true, true) => "DGW v3 (corrected)".into(),
+        }
     }
 
     fn next_bits(&self, chain: &[Header], params: &Params) -> u32 {
@@ -91,7 +101,13 @@ impl DifficultyAlgo for Dgw {
         let mut avg = U256::zero();
         for n in 1..=DGW_PAST_BLOCKS {
             let target = from_compact(chain[chain.len() - n].bits);
-            avg = if n == 1 { target } else { (avg * U256::from(n) + target) / U256::from(n + 1) };
+            avg = if self.fix_average {
+                avg + target / U256::from(DGW_PAST_BLOCKS)
+            } else if n == 1 {
+                target
+            } else {
+                (avg * U256::from(n) + target) / U256::from(n + 1)
+            };
         }
         let first = &chain[chain.len() - DGW_PAST_BLOCKS];
 
@@ -195,6 +211,34 @@ impl DifficultyAlgo for Asert {
     }
 }
 
+/// WTEMA by zawy12 / Jacob Eliosoff: a first-order exponential filter on the last solvetime,
+/// `next = prev * (T*(M-1) + st) / (T*M)`. It is the relative form of ASERT and matches it except
+/// for very long solvetimes, where it lowers difficulty linearly instead of exponentially.
+/// Like ASERT it takes over at the fork block; before that it uses DGW v3.
+pub struct Wtema {
+    /// Mean lifetime in blocks.
+    pub m: i64,
+}
+
+impl DifficultyAlgo for Wtema {
+    fn name(&self) -> String {
+        format!("WTEMA M={}", self.m)
+    }
+
+    fn next_bits(&self, chain: &[Header], params: &Params) -> u32 {
+        let last = chain.last().expect("empty chain");
+        if last.height <= params.fork_height || chain.len() < 2 {
+            return Dgw::CURRENT.next_bits(chain, params);
+        }
+        let t = params.target_spacing;
+        let solvetime = last.time - chain[chain.len() - 2].time;
+        // A solvetime of -(M-1)*T or less would make the target zero or negative.
+        let numerator = (t * (self.m - 1) + solvetime).max(1);
+        let next = from_compact(last.bits) * U256::from(numerator) / U256::from(t * self.m);
+        to_compact(next.max(U256::one()).min(params.pow_limit))
+    }
+}
+
 /// Recomputes every block's nBits from its predecessors with the mainnet rule and returns the
 /// heights where the result differs from the chain as (height, computed, actual).
 pub fn mismatches(headers: &[Header], params: &Params) -> Vec<(usize, u32, u32)> {
@@ -212,6 +256,25 @@ mod tests {
 
     fn flat_chain(n: u32, spacing: i64, bits: u32) -> Vec<Header> {
         (0..n).map(|h| Header { height: h, time: 1_000_000 + h as i64 * spacing, bits, n_tx: 1 }).collect()
+    }
+
+    #[test]
+    fn corrected_dgw_holds_difficulty_on_schedule() {
+        let params = Params::mainnet();
+        let bits = to_compact(params.pow_limit >> 12);
+        let chain = flat_chain(100, params.target_spacing, bits);
+        assert_eq!(Dgw::CORRECTED.next_bits(&chain, &params), bits);
+        // The current rule reads 24 intervals' worth of target time from 23 intervals.
+        assert_ne!(Dgw::CURRENT.next_bits(&chain, &params), bits);
+    }
+
+    #[test]
+    fn wtema_keeps_difficulty_on_schedule() {
+        let mut params = Params::mainnet();
+        let bits = to_compact(params.pow_limit >> 12);
+        let chain = flat_chain(200, params.target_spacing, bits);
+        params.fork_height = 100;
+        assert_eq!(Wtema { m: 36 }.next_bits(&chain, &params), bits);
     }
 
     #[test]

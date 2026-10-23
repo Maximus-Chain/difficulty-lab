@@ -1,6 +1,6 @@
 //! Runs every scenario and assembles the JSON consumed by the HTML report.
 
-use crate::algo::{self, Asert, DifficultyAlgo, Dgw, Lwma, Params};
+use crate::algo::{self, Asert, DifficultyAlgo, Dgw, Lwma, Params, Wtema};
 use crate::chain::Header;
 use crate::hashrate::{self, Curve};
 use crate::anomalies::biggest_crash;
@@ -140,7 +140,8 @@ struct Spec<'a> {
 fn algos() -> Vec<Box<dyn DifficultyAlgo + Send + Sync>> {
     vec![
         Box::new(Dgw::CURRENT),
-        Box::new(Dgw { fix_timespan: true }),
+        Box::new(Dgw { fix_timespan: true, fix_average: false }),
+        Box::new(Dgw::CORRECTED),
         Box::new(Lwma { n: 24 }),
         Box::new(Lwma { n: 45 }),
         Box::new(Lwma { n: 60 }),
@@ -148,6 +149,7 @@ fn algos() -> Vec<Box<dyn DifficultyAlgo + Send + Sync>> {
         Box::new(Asert { tau: 24 }),
         Box::new(Asert { tau: 36 }),
         Box::new(Asert { tau: 72 }),
+        Box::new(Wtema { m: 36 }),
     ]
 }
 

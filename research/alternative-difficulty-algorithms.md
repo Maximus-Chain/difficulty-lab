@@ -172,3 +172,21 @@ ASERT is now implemented in `src/algo.rs` as a port of the integer aserti3-2d co
 The analytical predictions hold: τ=36 recovers a −99% drop in 3.6 h (predicted 3.8 h) and matches LWMA-60 under profit switching. The 6T solvetime cap in our LWMA-1 is confirmed as the reason LWMA-60 is so slow after a near-total collapse.
 
 The cost the analysis did not quantify is the burst when the hashrate returns. ASERT ties difficulty to how far the chain is behind its ideal schedule, so after a −99% drop it has to win back about τ·ln(100) blocks (~166 for τ=36) once the miners come back: about 200 blocks in the first hour against 96 for DGW. Total emission stays on schedule, but those blocks come every ~18 s for a while, with more orphan risk. A larger τ makes the burst larger. The long-delay layer (candidate 2) is not simulated yet; it needs the simulator to support a target that falls while a block is being mined.
+
+### The two controls: corrected DGW and WTEMA
+
+Both are now in the simulator too. "DGW corrected" keeps the clamps and fixes both bugs: the off-by-one timespan and the running "average" that counts the latest target twice. WTEMA uses M=36 to match ASERT τ=36.
+
+| | DGW v3 | DGW corrected | ASERT τ=36 | WTEMA M=36 |
+|---|---|---|---|---|
+| Replay: mean block time | 75.6 s | 72.5 s | 72.0 s | 72.9 s |
+| Replay: gaps over 7 min per day | 4.8 | 3.9 | 2.9 | 3.1 |
+| Replay: difficulty jitter | 6.1% | 6.1% | 2.6% | 2.6% |
+| Profit switching: gaps over 7 min per day | 18.6 | 17.9 | 11.9 | 12.1 |
+| Hours to normal pace, −50% / −80% / −99% | 0.1 / 0.4 / 8.3 | 0.1 / 0.4 / 8.8 | 0.2 / 1.1 / 3.6 | 0.2 / 1.2 / 5.2 |
+| Blocks in the first 6 h at −99% (target 300) | 19 | 15 | 126 | 62 |
+| Blocks in the first hour after the return, −99% | 96 | 99 | 201 | 198 |
+
+The corrected DGW only fixes the pace: blocks come at 72.5 s instead of 75.6 s, and gaps drop by about a fifth in the replay. Its jitter, its response to profit switching and its recovery from a collapse stay the same as the current DGW. The rest of ASERT's improvement therefore comes from the filter, not from removing DGW's bias.
+
+WTEMA matches ASERT under normal conditions and under profit switching, as the literature predicts. It falls behind after a near-total collapse (5.2 h instead of 3.6 h, half the blocks in the first 6 h), because it lowers difficulty linearly with each long solvetime while ASERT lowers it exponentially with elapsed time. It also runs about 1% slow (72.9 s), the known bias of applying the filter to the target rather than to difficulty. ASERT has neither problem and also gets the absolute schedule, so it stays the main candidate.
