@@ -129,6 +129,9 @@ fn write_html(path: &Path, json: &str) -> Result<()> {
         "<!doctype html>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n{}",
         TEMPLATE.replace("__REPORT_DATA__", json)
     );
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
     std::fs::write(path, page)?;
     Ok(())
 }

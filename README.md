@@ -17,6 +17,8 @@ cargo run --release -- validate
 cargo run --release -- simulate
 ```
 
+The published report lives in `docs/index.html` (served by GitHub Pages). Refresh it with `cargo run --release -- simulate --html docs/index.html`.
+
 `simulate --help` lists the knobs: runs per scenario, hashrate window, propagation latency, pulse size and profit-switching thresholds.
 
 ## How it works
