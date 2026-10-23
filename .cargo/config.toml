@@ -1,0 +1,3 @@
+# rustc 1.99 overflows its stack compiling primitive-types in release mode.
+[env]
+RUST_MIN_STACK = "33554432"
