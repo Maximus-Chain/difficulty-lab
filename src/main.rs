@@ -1,8 +1,12 @@
 mod algo;
 mod anomalies;
 mod chain;
+mod crashes;
+mod decision;
 mod hashrate;
+mod mergemining;
 mod metrics;
+mod miners;
 mod par;
 mod report;
 mod rpc;
@@ -54,6 +58,81 @@ enum Cmd {
         input: PathBuf,
         #[arg(long, default_value_t = 1200)]
         start_height: usize,
+    },
+    /// Every real hashrate collapse: depth, duration and the hour-by-hour profile of the deepest.
+    Crashes {
+        #[arg(long, default_value = "data/headers.csv")]
+        input: PathBuf,
+        #[arg(long, default_value_t = 1200)]
+        start_height: usize,
+    },
+    /// Who mines: pool tags, payout addresses and AuxPoW parent blocks, with their concentration over time.
+    Miners {
+        #[command(flatten)]
+        rpc: RpcArgs,
+        #[arg(long, default_value = "data/headers.csv")]
+        input: PathBuf,
+        /// Per-block coinbase and AuxPoW cache (only missing heights are fetched).
+        #[arg(long, default_value = "data/miners.csv")]
+        cache: PathBuf,
+        #[arg(long, default_value_t = 1200)]
+        start_height: usize,
+        #[arg(long, default_value = "data/miners.json")]
+        out: PathBuf,
+    },
+    /// Did the pools that left Maximus keep mining Dash (the parent) and Osmium (the sibling aux chain)?
+    MergeMining {
+        #[command(flatten)]
+        rpc: RpcArgs,
+        #[arg(long, default_value = "http://127.0.0.1:9968")]
+        osmium_url: String,
+        #[arg(long, default_value = "data/headers.csv")]
+        input: PathBuf,
+        #[arg(long, default_value = "data/miners.csv")]
+        cache: PathBuf,
+        #[arg(long, default_value = "data/osmium.csv")]
+        osmium_cache: PathBuf,
+        /// Public Insight API of a Dash explorer (only block hashes and heights are looked up).
+        #[arg(long, default_value = "https://explorer.dash.org/insight-api")]
+        dash_api: String,
+        #[arg(long, default_value = "data/dash-insight")]
+        dash_cache: PathBuf,
+        #[arg(long, default_value_t = 1200)]
+        start_height: usize,
+        #[arg(long, default_value = "data/mergemining.json")]
+        out: PathBuf,
+    },
+    /// The ASERT decision page: collapse sizes side by side, weighted by the real collapses, with who mines.
+    Decision {
+        #[arg(long, default_value = "data/headers.csv")]
+        input: PathBuf,
+        #[arg(long, default_value_t = 1200)]
+        start_height: usize,
+        /// Output of the `miners` subcommand, embedded when present.
+        #[arg(long, default_value = "data/miners.json")]
+        miners: PathBuf,
+        /// Output of the `merge-mining` subcommand, embedded when present.
+        #[arg(long, default_value = "data/mergemining.json")]
+        mergemining: PathBuf,
+        #[arg(long, default_value = "data/decision.json")]
+        out: PathBuf,
+        #[arg(long, default_value = "docs/asert-decision.html")]
+        html: PathBuf,
+        #[arg(long, default_value_t = 200)]
+        grid_runs: usize,
+        #[arg(long, default_value_t = 100)]
+        catalogue_runs: usize,
+        #[arg(long, default_value_t = 8)]
+        replay_runs: usize,
+        #[arg(long, default_value_t = 40)]
+        switching_runs: usize,
+        #[arg(long, default_value_t = 240)]
+        hashrate_window: usize,
+        #[arg(long, default_value_t = 5.0)]
+        latency: f64,
+        /// Rebuild the page from the JSON written by a previous run, without simulating again.
+        #[arg(long)]
+        render_only: bool,
     },
     /// Miners switching on purpose, for every algorithm: profit switching and a pool that leaves and returns.
     Switching {
@@ -138,6 +217,51 @@ fn main() -> Result<()> {
         }
         Cmd::Validate { input } => validate(&chain::read_csv(&input)?),
         Cmd::Switching { input, runs } => switching::print(&switching::build(&chain::read_csv(&input)?, runs, &report::algos())),
+        Cmd::Crashes { input, start_height } => crashes::print(&crashes::build(&chain::read_csv(&input)?, start_height)),
+        Cmd::Miners { rpc, input, cache, start_height, out } => {
+            let headers = chain::read_csv(&input)?;
+            let blocks = miners::load(&rpc.client(), &cache, start_height as u32, miners::tip_of(&headers))?;
+            let report = miners::build(&blocks, &crashes::build(&headers, start_height));
+            miners::print(&report);
+            std::fs::write(&out, serde_json::to_string(&report)?)?;
+            println!("\nwrote {}", out.display());
+        }
+        Cmd::MergeMining { rpc, osmium_url, input, cache, osmium_cache, dash_api, dash_cache, start_height, out } => {
+            let headers = chain::read_csv(&input)?;
+            let (rpc, osmium_rpc) = (rpc.client(), rpc::Rpc::new(&osmium_url, &rpc.user, &rpc.password));
+            let maximus = miners::load(&rpc, &cache, start_height as u32, miners::tip_of(&headers))?;
+            let osmium_tip = osmium_rpc.call("getblockcount", serde_json::json!([]))?.as_u64().unwrap_or(0) as u32;
+            let osmium = miners::load(&osmium_rpc, &osmium_cache, 1, osmium_tip)?;
+            let mut dash = mergemining::Insight::new(&dash_api, dash_cache)?;
+            let report = mergemining::build(&rpc, &osmium_rpc, &mut dash, &maximus, &osmium, &crashes::build(&headers, start_height))?;
+            mergemining::print(&report);
+            std::fs::write(&out, serde_json::to_string(&report)?)?;
+            println!("\nwrote {} ({} explorer requests)", out.display(), dash.requests);
+        }
+        Cmd::Decision { input, start_height, miners, mergemining, out, html, grid_runs, catalogue_runs, replay_runs, switching_runs, hashrate_window, latency, render_only } => {
+            if render_only {
+                write_page(&html, include_str!("../report/decision.html"), "__DECISION_DATA__", &std::fs::read_to_string(&out)?)?;
+                println!("wrote {}", html.display());
+                return Ok(());
+            }
+            let headers = chain::read_csv(&input)?;
+            let embed = |path: &Path| -> Result<Option<serde_json::Value>> {
+                match std::fs::read_to_string(path) {
+                    Ok(text) => Ok(Some(serde_json::from_str(&text)?)),
+                    Err(_) => {
+                        eprintln!("nothing at {}, left out of the page", path.display());
+                        Ok(None)
+                    }
+                }
+            };
+            let opts = decision::Options { grid_runs, catalogue_runs, replay_runs, switching_runs, start_height, hashrate_window, latency };
+            let report = decision::build(&headers, crashes::build(&headers, start_height), embed(&miners)?, embed(&mergemining)?, &opts);
+            decision::print(&report);
+            let json = serde_json::to_string(&report)?;
+            std::fs::write(&out, &json)?;
+            write_page(&html, include_str!("../report/decision.html"), "__DECISION_DATA__", &json)?;
+            println!("wrote {} and {}", out.display(), html.display());
+        }
         Cmd::Anomalies { input, start_height } => anomalies::report(&chain::read_csv(&input)?, start_height),
         Cmd::Superblocks { rpc, input, cache, out } => {
             let audit = superblocks::audit(&rpc.client(), &chain::read_csv(&input)?, &cache)?;
@@ -200,12 +324,15 @@ fn main() -> Result<()> {
 }
 
 fn write_html(path: &Path, json: &str) -> Result<()> {
-    const TEMPLATE: &str = include_str!("../report/template.html");
+    write_page(path, include_str!("../report/template.html"), "__REPORT_DATA__", json)
+}
+
+fn write_page(path: &Path, template: &str, placeholder: &str, json: &str) -> Result<()> {
     // The template is a page body (it is also published as a hosted artifact, which adds its
     // own document skeleton), so a standalone file needs the doctype and charset added here.
     let page = format!(
         "<!doctype html>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n{}",
-        TEMPLATE.replace("__REPORT_DATA__", json)
+        template.replace(placeholder, json)
     );
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;

@@ -1,0 +1,673 @@
+<title>ASERT Decision Notes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Public+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of lab-notebook sections; each section = claim, chart, numbers. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #101418;
+  --ink-2: #4a5260;
+  --muted: #6b7380;
+  --rule: #dfe3e9;
+  --grid: #eceff3;
+  --shade: rgba(42, 120, 214, 0.08);
+  --hopper: rgba(235, 104, 52, 0.12);
+  --bad: #c0322b;
+  --good: #11804a;
+  --s-real: #3d4450;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
+  --s7: #7b4fd6; --s8: #0b8ea0; --s9: #8a6d00; --s10: #a8452a; --s11: #4e6278;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Public Sans", "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #191c21; --ink: #eef0f3; --ink-2: #b7bdc7; --muted: #8d95a1;
+    --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a; --good: #4fc98a;
+    --s-real: #c9ced6;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a; --s10: #d97a5c; --s11: #8ea3ba;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #191c21; --ink: #eef0f3; --ink-2: #b7bdc7; --muted: #8d95a1;
+  --rule: #2b3038; --grid: #22262d; --shade: rgba(57, 135, 229, 0.12); --hopper: rgba(217, 89, 38, 0.16); --bad: #f0706a; --good: #4fc98a;
+  --s-real: #c9ced6;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9a72f0; --s8: #22a8bc; --s9: #b0901a; --s10: #d97a5c; --s11: #8ea3ba;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--body); }
+.page {
+  max-width: 1080px; margin: 0 auto;
+  padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 56px;
+}
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 800; line-height: 1.05; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 15px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 500 12px/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.lede { font-size: 17px; color: var(--ink-2); }
+header { display: flex; flex-direction: column; gap: 14px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 24px; font: 13px/1.4 var(--mono); color: var(--ink-2); }
+.facts b { color: var(--ink); font-weight: 500; }
+.ok { color: var(--good); font-weight: 600; }
+.notice { border: 1px solid var(--rule); border-left: 3px solid var(--ink-2); background: var(--surface); border-radius: 4px; padding: 10px 14px; font-size: 14px; color: var(--ink-2); max-width: 78ch; }
+.notice b { color: var(--ink); }
+
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.finding { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.finding .big { font: 700 28px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.finding p { font-size: 14px; color: var(--ink-2); }
+
+section { display: flex; flex-direction: column; gap: 18px; }
+.section-head { display: flex; flex-direction: column; gap: 8px; border-top: 2px solid var(--ink); padding-top: 14px; }
+
+.filters { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.filters .label { font: 500 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-right: 4px; }
+.chip { font: 500 13px var(--body); color: var(--ink-2); background: var(--surface); border: 1px solid var(--rule); border-radius: 999px; padding: 4px 12px 4px 8px; display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.chip .sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); opacity: 0.25; }
+.chip[aria-pressed="true"] { color: var(--ink); border-color: var(--ink-2); }
+.chip[aria-pressed="true"] .sw { opacity: 1; }
+.chip:focus-visible, .tab:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 16px 10px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: baseline; }
+.card-head p { font-size: 13px; color: var(--muted); }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { font: 11px var(--mono); fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 2px; background: var(--c); display: inline-block; }
+.legend i.dash { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 7px); }
+.legend i.box { height: 10px; width: 10px; border-radius: 2px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 9px; font: 12px/1.5 var(--mono); color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,0.12); white-space: nowrap; z-index: 3; }
+.tip .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.tip .row span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.tip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); display: inline-block; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 16px; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { font: 500 12px var(--mono); background: transparent; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 4px; padding: 3px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.tab .sw { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { white-space: normal; min-width: 64px; }
+th { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); vertical-align: bottom; }
+th:first-child, td:first-child { text-align: left; }
+th .rng { display: block; font: 10px var(--mono); color: var(--muted); text-transform: none; letter-spacing: 0; margin-top: 2px; }
+td .rng { display: block; font: 11px var(--mono); color: var(--muted); }
+td .name { display: inline-flex; gap: 8px; align-items: center; font-weight: 600; }
+td.bad { color: var(--bad); font-weight: 600; }
+td.best { color: var(--good); font-weight: 700; }
+tr.group td { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 14px; border-bottom: 1px solid var(--rule); }
+tr.wins td { font-weight: 600; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 13px var(--mono); }
+.toc a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.toc a:hover { color: var(--ink); border-color: var(--ink-2); }
+.toc .label { font: 500 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.filters .group { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-left: 8px; }
+td .name i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+tr.real td { background: var(--grid); }
+.note { font-size: 13px; color: var(--muted); }
+footer { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+code { font: 12.5px var(--mono); background: var(--grid); padding: 1px 5px; border-radius: 3px; }
+@media (prefers-reduced-motion: no-preference) { .chip, .tab { transition: background 120ms, border-color 120ms; } }
+.verdict { background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--good); border-radius: 6px; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+.verdict h2 { font-size: 22px; }
+.verdict ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 78ch; }
+.verdict li { color: var(--ink-2); }
+.verdict li b { color: var(--ink); }
+.back { font: 500 13px var(--mono); color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); align-self: flex-start; }
+.back:hover { color: var(--ink); border-color: var(--ink-2); }
+.bar { display: inline-block; height: 8px; border-radius: 2px; background: var(--c); vertical-align: middle; margin-right: 6px; }
+td.left, th.left { text-align: left; }
+td.wrap { white-space: normal; min-width: 220px; text-align: left; color: var(--ink-2); }
+</style>
+
+<div class="page">
+  <header>
+    <span class="eyebrow">Maximus mainnet · difficulty adjustment study · decision notes</span>
+    <h1>Choosing ASERT's half-life</h1>
+    <p class="lede">The main report compares every candidate algorithm. This page narrows it to one decision: is ASERT with τ=24 the right replacement for DGW v3, or would LWMA-1 N=45 or a longer ASERT half-life serve Maximus better? The answer depends on how big real hashrate collapses are, who mines the chain, and how the merge-mining pools behave, so all three are measured here from the chain itself.</p>
+    <div class="facts" id="facts"></div>
+    <p class="notice" role="note"><b>Research only.</b> No change to the difficulty algorithm or to emission has been decided. Any such change would be a hard fork, announced well in advance with an activation height and an upgrade window for pools, exchanges and node operators.</p>
+    <a class="back" href="index.html">← Full comparison of all algorithms</a>
+  </header>
+
+  <section id="summary">
+    <div class="verdict" id="verdict"></div>
+  </section>
+
+  <div class="findings" id="findings"></div>
+
+  <nav class="toc" aria-label="Sections">
+    <span class="label">Contents</span>
+    <a href="#collapses">Real collapses</a>
+    <a href="#miners">Who mines</a>
+    <a href="#mergemining">Merge-mining pools</a>
+    <a href="#side-by-side">Collapse sizes side by side</a>
+    <a href="#weighted">Weighted by real collapses</a>
+    <a href="#method">Method</a>
+  </nav>
+
+  <section id="collapses">
+    <div class="section-head">
+      <span class="eyebrow">Real collapses</span>
+      <h2>How big do hashrate collapses get on Maximus?</h2>
+      <p>Hashrate is measured hour by hour from the chain: every block's work is spread over the time it took to find, so even an hour without blocks gets an estimate. A collapse is a run of hours below half the median of the previous 24 hours, and its depth is the drop of its median hour.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Collapses by depth</h3><p id="buckets-sub"></p></div>
+      <div class="table-wrap"><table id="buckets"></table></div>
+    </div>
+    <div class="two">
+      <div class="card">
+        <div class="card-head"><h3>October 2025, day by day</h3><p>average hashrate per day, log scale</p></div>
+        <div class="chart" id="oct-days"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>October 2025, the first hours</h3><p>hourly hashrate, log scale</p></div>
+        <div class="chart" id="oct-hours"></div>
+      </div>
+    </div>
+    <p class="note" id="oct-note"></p>
+    <div class="card">
+      <div class="card-head"><h3>Every collapse of 2 hours or more, or deeper than 80%</h3><p>times in UTC</p></div>
+      <div class="table-wrap"><table id="episodes"></table></div>
+    </div>
+  </section>
+
+  <section id="miners">
+    <div class="section-head">
+      <span class="eyebrow">Who mines</span>
+      <h2>One pool finds almost every block</h2>
+      <p>The pool is read from the coinbase of every block. Since AuxPoW, Maximus coinbases carry only the height, so for merge-mined blocks the tag comes from the parent block's coinbase, next to the merged-mining marker. Shares of blocks stand in for shares of hashrate.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Concentration</h3><p>HHI: sum of squared shares (1 = a single pool)</p></div>
+      <div class="table-wrap"><table id="windows"></table></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Share of blocks per pool, every 30 days</h3><p>whole history</p></div>
+      <div class="legend" id="pools-legend"></div>
+      <div class="chart" id="pools-chart"></div>
+    </div>
+    <p class="note" id="miners-note"></p>
+  </section>
+
+  <section id="mergemining">
+    <div class="section-head">
+      <span class="eyebrow">Merge-mining pools</span>
+      <h2>During Maximus's collapses, the pool kept mining Dash</h2>
+      <p>Maximus is merge-mined on top of Dash, next to Osmium (chain ID 0x62), which is merge-mined on the same Dash work. If the dominant pool kept finding Dash and Osmium blocks while Maximus collapsed, its hashrate never left: it only stopped including Maximus.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Is the parent chain really Dash?</h3><p id="parents-sub"></p></div>
+      <div class="table-wrap"><table id="parents"></table></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>The dominant pool during each collapse deeper than 90%</h3><p id="mm-sub">week before → during the collapse</p></div>
+      <div class="table-wrap"><table id="mm-collapses"></table></div>
+    </div>
+    <p class="note" id="mm-note"></p>
+  </section>
+
+  <section id="side-by-side">
+    <div class="section-head">
+      <span class="eyebrow">Collapse sizes side by side</span>
+      <h2>Up to −80% the rules are within an hour of each other; from −95% they are not</h2>
+      <p>A flat chain in equilibrium loses part of its hashrate at once and gets it back after 2, 6 or 24 hours. Each cell is the mean of <span id="grid-runs"></span> Monte Carlo runs. Lower is better in every table.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3 id="grid-title"></h3><p id="grid-sub"></p></div>
+      <div class="tabs" id="grid-tabs" role="tablist"></div>
+      <div class="table-wrap"><table id="grid"></table></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Hours to a normal pace, collapse lasting 24 hours</h3><p>by collapse depth</p></div>
+      <div class="legend" id="depth-legend"></div>
+      <div class="chart" id="depth-chart"></div>
+    </div>
+  </section>
+
+  <section id="weighted">
+    <div class="section-head">
+      <span class="eyebrow">Weighted by real collapses</span>
+      <h2>Replaying every real collapse, plus everyday stability</h2>
+      <p>Each of the chain's real collapses is simulated with its own depth and duration, and the totals are scaled to one year. That weights each collapse size by how often it really happens, instead of picking one scenario. Steady-state columns come from replaying the real hashrate; the last two come from the switching simulations of the main report.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Scorecard</h3><p id="score-sub"></p></div>
+      <div class="table-wrap"><table id="score"></table></div>
+    </div>
+    <p class="note" id="score-note"></p>
+  </section>
+
+  <section id="method">
+    <div class="section-head">
+      <span class="eyebrow">Method</span>
+      <h2>How the numbers were produced</h2>
+    </div>
+    <div class="note" style="display:flex;flex-direction:column;gap:10px;max-width:72ch">
+      <p>Collapses come from the headers of every mainnet block. The pools come from <code>getblock</code> on every block: the coinbase scriptSig, the payout address and the AuxPoW parent block with its coinbase. The pool name is the <code>/name/</code> tag pools write there; random extranonce bytes around it are ignored.</p>
+      <p>An AuxPoW parent block is usually only a share. It meets Maximus's target, not Dash's, so its own hash is not on Dash. The parent check therefore looks up the block it builds on, which must be on Dash's main chain at the parent's height minus one, in a public Dash explorer. Dash's own pool shares come from 30 Dash blocks sampled by height on each side of a collapse, so each sampled block is worth about 3 percentage points. Osmium comes from a full node and every block is counted.</p>
+      <p>Simulations use the same code as the main report: exponential block work, <span id="m-lat"></span> s of wasted work per block, and each new rule activated at a hard fork from a chain in equilibrium at today's difficulty. "Normal pace" means 24 consecutive blocks averaging under 1.5·T. "Blocks lost" are blocks a perfectly paced chain would have produced during the collapse, in hours of blocks. "Burst" counts blocks beyond the normal 50 in the first hour after the hashrate returns.</p>
+      <p>Regenerate with <code>cargo run --release -- extract</code>, <code>miners</code>, <code>merge-mining</code>, then <code>decision</code>.</p>
+    </div>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const D = __DECISION_DATA__;
+const ALGOS = [
+  { name: "DGW v3", short: "DGW v3 (current)", color: "--s1", on: true },
+  { name: "LWMA-1 N=45", short: "LWMA N=45", color: "--s5", on: true },
+  { name: "ASERT tau=24", short: "ASERT τ=24", color: "--s8", on: true },
+  { name: "ASERT tau=36", short: "ASERT τ=36", color: "--s7", on: true },
+  { name: "ASERT tau=48", short: "ASERT τ=48", color: "--s9", on: true },
+];
+const T = D.target_spacing;
+const algoInfo = name => ALGOS.find(a => a.name === name) || { name, short: name, color: "--muted" };
+const cssVar = v => `var(${v})`;
+const fmt = (v, d = 1) => v == null || !isFinite(v) ? "–" : v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtSI = v => {
+  if (v == null) return "–";
+  const units = [["E", 1e18], ["P", 1e15], ["T", 1e12], ["G", 1e9], ["M", 1e6], ["k", 1e3]];
+  for (const [u, s] of units) if (Math.abs(v) >= s) return (v / s).toPrecision(3) + " " + u;
+  return v.toPrecision(3);
+};
+const dateFmt = t => new Date(t * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const monthFmt = t => new Date(t * 1000).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+const timeFmt = t => new Date(t * 1000).toISOString().slice(11, 16) + " UTC";
+const el = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); for (const k in attrs) e.setAttribute(k, attrs[k]); e.innerHTML = html; return e; };
+const NS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs = {}) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+
+/* ---------- scales ---------- */
+function niceTicks(min, max, count = 5) {
+  const span = max - min || 1;
+  const step0 = span / count, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= count) || 10 * mag;
+  const ticks = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-9; v += step) ticks.push(+v.toPrecision(12));
+  return ticks;
+}
+function logTicks(min, max) {
+  const ticks = [];
+  for (let e = Math.floor(Math.log10(min)); e <= Math.ceil(Math.log10(max)); e++) {
+    const v = Math.pow(10, e);
+    if (v >= min && v <= max) ticks.push(v);
+  }
+  return ticks;
+}
+
+/* ---------- shared visibility ---------- */
+const visible = new Set(ALGOS.filter(a => a.on).map(a => a.name));
+const redrawers = [];
+function redrawAll() { redrawers.forEach(f => f()); }
+window.addEventListener("resize", () => { clearTimeout(window.__rz); window.__rz = setTimeout(redrawAll, 120); });
+
+/* ---------- line chart with crosshair tooltip ----------
+   opts: { x:[...], series:[{name, label, color, values, dash}], height, log, yMin, refs:[{y,label}],
+           xFmt, xTipFmt, yFmt, yTipFmt, bands:[{from,to,fill,label}] } */
+function lineChart(host, optsFn) {
+  const draw = () => {
+    const opts = optsFn();
+    host.innerHTML = "";
+    const W = host.clientWidth || 600, H = opts.height || 240;
+    const m = { l: 52, r: 14, t: 12, b: 26 };
+    const series = opts.series.filter(s => s.values.some(v => v != null));
+    const xs = opts.x;
+    const xMin = xs[0], xMax = xs[xs.length - 1];
+    let lo = Infinity, hi = -Infinity;
+    for (const s of series) for (const v of s.values) if (v != null && (!opts.log || v > 0)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    for (const r of opts.refs || []) { lo = Math.min(lo, r.y); hi = Math.max(hi, r.y); }
+    if (opts.yMin != null) lo = Math.min(lo, opts.yMin);
+    if (opts.yMax != null) hi = Math.min(hi, opts.yMax);
+    let yTicks, sy;
+    if (opts.log) {
+      lo = Math.pow(10, Math.floor(Math.log10(lo))); hi = Math.pow(10, Math.ceil(Math.log10(hi)));
+      yTicks = logTicks(lo, hi);
+      sy = v => m.t + (H - m.t - m.b) * (1 - (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)));
+    } else {
+      yTicks = niceTicks(lo, hi, 5); lo = Math.min(lo, yTicks[0]); hi = Math.max(hi, yTicks[yTicks.length - 1]);
+      sy = v => m.t + (H - m.t - m.b) * (1 - (v - lo) / (hi - lo || 1));
+    }
+    const sx = v => m.l + (W - m.l - m.r) * (v - xMin) / (xMax - xMin || 1);
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": opts.aria || "" });
+
+    for (const b of opts.bands || []) {
+      svg.append(svgEl("rect", { x: sx(b.from), y: m.t, width: Math.max(1, sx(b.to) - sx(b.from)), height: H - m.t - m.b, fill: b.fill }));
+    }
+    for (const t of yTicks) {
+      const y = sy(t);
+      svg.append(svgEl("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: "var(--grid)", "stroke-width": 1 }));
+      const tx = svgEl("text", { x: m.l - 8, y: y + 4, "text-anchor": "end" }); tx.textContent = (opts.yFmt || fmtSI)(t); svg.append(tx);
+    }
+    const xTicks = opts.xTicks ? opts.xTicks(xMin, xMax) : niceTicks(xMin, xMax, Math.max(2, Math.floor((W - m.l) / 110)));
+    for (const t of xTicks) {
+      if (t < xMin || t > xMax) continue;
+      const tx = svgEl("text", { x: sx(t), y: H - 6, "text-anchor": "middle" }); tx.textContent = (opts.xFmt || String)(t); svg.append(tx);
+    }
+    svg.append(svgEl("line", { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: "var(--rule)" }));
+    for (const r of opts.refs || []) {
+      const y = sy(r.y);
+      svg.append(svgEl("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: "var(--ink-2)", "stroke-width": 1, "stroke-dasharray": "3 4" }));
+      const tx = svgEl("text", { x: W - m.r, y: y - 5, "text-anchor": "end" }); tx.textContent = r.label; tx.style.fill = "var(--ink-2)"; svg.append(tx);
+    }
+    for (const s of series) {
+      let d = "", pen = false;
+      s.values.forEach((v, i) => {
+        if (v == null || (opts.log && v <= 0)) { pen = false; return; }
+        d += (pen ? "L" : "M") + sx(xs[i]).toFixed(1) + "," + sy(v).toFixed(1); pen = true;
+      });
+      svg.append(svgEl("path", { d, fill: "none", stroke: cssVar(s.color), "stroke-width": s.width || 2, "stroke-linejoin": "round", "stroke-linecap": "round", "stroke-dasharray": s.dash || "" }));
+    }
+
+    const cross = svgEl("line", { y1: m.t, y2: H - m.b, stroke: "var(--ink-2)", "stroke-width": 1, visibility: "hidden" });
+    svg.append(cross);
+    const dots = series.map(s => { const c = svgEl("circle", { r: 4, fill: cssVar(s.color), stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }); svg.append(c); return c; });
+    const hit = svgEl("rect", { x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent" });
+    svg.append(hit);
+    host.append(svg);
+    const tip = el("div", { class: "tip", hidden: "" }); host.append(tip);
+
+    const move = ev => {
+      const r = svg.getBoundingClientRect();
+      const px = (ev.clientX - r.left) * (W / r.width);
+      const xv = xMin + (px - m.l) / (W - m.l - m.r) * (xMax - xMin);
+      let i = 0, best = Infinity;
+      xs.forEach((x, k) => { const dd = Math.abs(x - xv); if (dd < best) { best = dd; i = k; } });
+      const X = sx(xs[i]);
+      cross.setAttribute("x1", X); cross.setAttribute("x2", X); cross.setAttribute("visibility", "visible");
+      let rows = "";
+      series.forEach((s, k) => {
+        const v = s.values[i];
+        if (v == null) { dots[k].setAttribute("visibility", "hidden"); return; }
+        dots[k].setAttribute("cx", X); dots[k].setAttribute("cy", sy(v)); dots[k].setAttribute("visibility", "visible");
+        rows += `<div class="row"><span><i style="--c:${cssVar(s.color)}"></i>${s.label}</span><b>${(opts.yTipFmt || opts.yFmt || fmtSI)(v)}</b></div>`;
+      });
+      tip.innerHTML = `<div style="color:var(--muted);margin-bottom:2px">${(opts.xTipFmt || opts.xFmt || String)(xs[i])}</div>` + rows;
+      tip.hidden = false;
+      const left = (X / W) * r.width;
+      tip.style.left = Math.min(Math.max(0, left + 12), r.width - tip.offsetWidth) + "px";
+      tip.style.top = "8px";
+      if (left + 12 + tip.offsetWidth > r.width) tip.style.left = Math.max(0, left - tip.offsetWidth - 12) + "px";
+    };
+    hit.addEventListener("pointermove", move);
+    hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); });
+  };
+  redrawers.push(draw);
+  draw();
+}
+
+
+function legend(host, items) {
+  host.innerHTML = items.map(s => `<span><i class="${s.kind || ""}" style="--c:${cssVar(s.color)}"></i>${s.label}</span>`).join("");
+}
+
+function tabs(host, items, onSelect) {
+  let current = items[0].key;
+  const render = () => {
+    host.innerHTML = "";
+    for (const it of items) {
+      const b = el("button", { class: "tab", role: "tab", "aria-selected": String(it.key === current), type: "button", style: `--c:${cssVar(it.color)}` }, `<span class="sw"></span>${it.label}`);
+      b.addEventListener("click", () => { current = it.key; render(); onSelect(current); });
+      host.append(b);
+    }
+  };
+  render();
+  return () => current;
+}
+
+
+const C = D.crashes, M = D.miners, G = D.mergemining;
+const pct = (v, d = 1) => fmt(100 * v, d) + "%";
+const th = v => fmt(v / 1e12, v < 1e13 ? 1 : 0) + " TH/s";
+const idx = name => D.algos.indexOf(name);
+const short = name => algoInfo(name).short;
+const when = t => new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ");
+const hoursFmt = h => h >= 48 ? fmt(h / 24, 0) + " days" : fmt(h, 0) + " h";
+const share = (w, pool) => (w.pools.find(p => p.pool === pool) || { share: 0 }).share;
+const dashShare = (side, pool) => (side.dash.find(p => p[0] === pool) || [0, 0])[1];
+const best = (values, lowerIsBetter = true) => { const f = lowerIsBetter ? Math.min : Math.max; return f(...values); };
+const W24 = D.weighted.find(w => w.name === "ASERT tau=24"), WDGW = D.weighted.find(w => w.name === "DGW v3"), WL45 = D.weighted.find(w => w.name === "LWMA-1 N=45");
+const steady = name => D.steady.find(s => s.name === name).metrics;
+const cell = (depth, hours) => D.grid.find(c => c.depth === depth && c.hours === hours);
+const deep = C.episodes.filter(e => e.depth >= 0.9);
+const months = (C.to - C.from) / (30.44 * 86400);
+const oct = C.deepest;
+const leader = M ? M.windows[0].pools[0] : null;
+const DOMINANT = leader ? leader.pool : "";
+
+/* ---------- reading of each deep collapse from the merge-mining data ---------- */
+function reading(c) {
+  // Blocks per hour the dominant pool found on each aux chain, so a handful of blocks in a quiet hour is not read as 100%.
+  const rate = (side, chain) => share(side[chain], DOMINANT) * side[chain + "_per_hour"];
+  const dashBefore = dashShare(c.before, DOMINANT), dashDuring = dashShare(c.during, DOMINANT);
+  const leftMaximus = rate(c.during, "maximus") < 0.5 * rate(c.before, "maximus");
+  const keptOsmium = rate(c.during, "osmium") >= 0.8 * rate(c.before, "osmium");
+  if (leftMaximus && keptOsmium) return { kind: "dropped", text: "Kept mining Dash and Osmium; left out only Maximus" };
+  if (dashBefore > 0 && dashDuring === 0) return { kind: "down", text: "Whole pool down, Dash included" };
+  if (rate(c.during, "osmium") < 0.2 * rate(c.before, "osmium") && dashDuring > 0) return { kind: "aux", text: "Kept mining Dash; both aux chains left out" };
+  return { kind: "partial", text: "Partial outage on both aux chains" };
+}
+
+/* ---------- header, verdict, findings ---------- */
+document.getElementById("facts").innerHTML = [
+  ["Chain tip", "#" + D.tip_height.toLocaleString("en-US")],
+  ["As of", dateFmt(D.tip_time)],
+  ["History", fmt(C.episodes.length ? (C.to - C.from) / 86400 : 0, 0) + " days"],
+  ["Collapses found", String(C.episodes.length)],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+
+const dropped = G ? G.collapses.filter(c => reading(c).kind === "dropped").length : 0;
+const s24 = steady("ASERT tau=24"), sDGW = steady("DGW v3"), s36 = steady("ASERT tau=36"), s48 = steady("ASERT tau=48");
+const c99 = cell(0.99, 24), c50 = cell(0.5, 24), c80 = cell(0.8, 24);
+const htn = (c, name) => c.algos[idx(name)].hours_to_normal.mean;
+const yearBlocks = 365.25 * 86400 / T;
+document.getElementById("verdict").innerHTML = `
+  <span class="eyebrow">Recommendation</span>
+  <h2>ASERT τ=24 remains the best fit</h2>
+  <ul>
+    <li><b>Deep collapses are real, not hypothetical.</b> ${deep.length} collapses deeper than 90% in ${fmt(months, 0)} months, ${C.episodes.filter(e => e.depth >= 0.99).length} of them at 99% or more. October 2025 was ${pct(oct.depth)} and lasted ${hoursFmt(oct.hours)}. They all happen when the one pool that finds ${pct(leader.share, 0)} of blocks stops mining Maximus.</li>
+    <li><b>Weighted by the real collapses, τ=24 stalls the chain least:</b> ${fmt(W24.stalled_hours, 1)} hours a year below a normal pace, against ${fmt(WDGW.stalled_hours, 1)} for DGW v3 and ${fmt(WL45.stalled_hours, 1)} for LWMA N=45, and ${fmt(W24.lost_hours, 1)} hours of blocks lost against ${fmt(WDGW.lost_hours, 1)} and ${fmt(WL45.lost_hours, 1)}.</li>
+    <li><b>Up to −80% the choice barely matters</b> (every rule is back to a normal pace within ${fmt(Math.max(...c80.algos.map(a => a.hours_to_normal.mean)), 1)} h). At −99% for 24 h it decides everything: ${fmt(htn(c99, "ASERT tau=24"), 1)} h with τ=24, ${fmt(htn(c99, "ASERT tau=36"), 1)} h with τ=36, ${fmt(htn(c99, "ASERT tau=48"), 1)} h with τ=48, ${fmt(htn(c99, "DGW v3"), 1)} h with DGW v3 and ${fmt(htn(c99, "LWMA-1 N=45"), 1)} h with LWMA N=45.</li>
+    <li><b>Longer half-lives buy steadier difficulty</b> (block-to-block jitter ${pct(s36.difficulty_jitter_pct / 100)} at τ=36 and ${pct(s48.difficulty_jitter_pct / 100)} at τ=48, against ${pct(s24.difficulty_jitter_pct / 100)} at τ=24 and ${pct(sDGW.difficulty_jitter_pct / 100)} today), but pay for it with hours of extra stall in exactly the collapses Maximus actually has.</li>
+    <li><b>The cost of τ=24 is a bigger burst</b> when the hashrate comes back: ${fmt(W24.burst_blocks, 0)} extra blocks a year against ${fmt(WDGW.burst_blocks, 0)} for DGW v3, about ${pct(W24.burst_blocks / yearBlocks, 2)} of a year's blocks. ${dropped} of the ${G ? G.collapses.length : 0} deep collapses were the merge-mining pool leaving out Maximus while it kept mining Dash. A merge-miner earns nothing elsewhere while Maximus is left out, so leaving on purpose to collect that burst loses more than it gains.</li>
+  </ul>`;
+
+const findings = [
+  [pct(oct.depth), `October 2025: from ${th(oct.baseline)} to a median hour of ${th(oct.during)}, for ${hoursFmt(oct.hours)}.`],
+  [String(deep.length), `collapses deeper than 90% in ${fmt(months, 0)} months. Between −50% and −80% there are ${C.episodes.filter(e => e.depth >= 0.5 && e.depth < 0.8).length}, and they last about 2 hours.`],
+  [pct(leader.share), `of the last 30 days' blocks come from ${DOMINANT}. ${pct(M.windows[1].auxpow, 0)} of blocks are merge-mined (AuxPoW) on Dash.`],
+  [`${dropped} of ${G ? G.collapses.length : 0}`, `deep collapses had ${DOMINANT} mining Dash and Osmium as usual. It had only left out Maximus.`],
+];
+document.getElementById("findings").innerHTML = findings.map(([big, text]) => `<div class="finding"><span class="big">${big}</span><p>${text}</p></div>`).join("");
+
+/* ---------- real collapses ---------- */
+document.getElementById("buckets-sub").textContent = `${dateFmt(C.from)} to ${dateFmt(C.to)}`;
+document.getElementById("buckets").innerHTML = `<tr><th>Depth of the median hour</th><th>Collapses</th><th>Median length</th><th>Longest</th><th>Hours in total</th></tr>` +
+  C.buckets.map(b => `<tr><td>${b.label === "<50% median" ? "Worst hours past 50%, median above" : "−" + b.label}</td><td>${b.count}</td><td>${b.count ? hoursFmt(b.median_hours) : "–"}</td><td>${b.count ? hoursFmt(b.max_hours) : "–"}</td><td>${fmt(b.total_hours, 0)}</td></tr>`).join("");
+
+const bandOct = { from: oct.start, to: oct.start + oct.hours * 3600, fill: "var(--shade)" };
+lineChart(document.getElementById("oct-days"), () => ({
+  x: C.deepest_days.map(p => p.time), log: true, height: 220, bands: [bandOct],
+  series: [{ label: "hashrate", color: "--s-real", values: C.deepest_days.map(p => Math.max(p.hashrate, 1e9)) }],
+  xFmt: t => new Date(t * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short" }), xTipFmt: t => dateFmt(t), yFmt: v => fmtSI(v) + "H/s",
+  aria: "Daily hashrate around the October 2025 collapse",
+}));
+const firstHours = C.deepest_hours.filter(p => p.time >= oct.start - 12 * 3600 && p.time < oct.start + 36 * 3600);
+lineChart(document.getElementById("oct-hours"), () => ({
+  x: firstHours.map(p => p.time), log: true, height: 220, bands: [{ ...bandOct, to: firstHours[firstHours.length - 1].time }],
+  series: [{ label: "hashrate", color: "--s-real", values: firstHours.map(p => Math.max(p.hashrate, 1e9)) }],
+  xTicks: (lo, hi) => { const out = []; for (let t = Math.ceil(lo / 21600) * 21600; t <= hi; t += 21600) out.push(t); return out; },
+  xFmt: t => timeFmt(t).slice(0, 5), xTipFmt: t => when(t) + " UTC", yFmt: v => fmtSI(v) + "H/s",
+  aria: "Hourly hashrate in the first hours of the October 2025 collapse",
+}));
+const firstNight = firstHours.filter(p => p.time >= oct.start + 3600 && p.time < oct.start + 13 * 3600).reduce((a, p) => a + p.blocks, 0);
+document.getElementById("oct-note").textContent = `The collapse began on ${when(oct.start)} UTC at block #${oct.first_height.toLocaleString("en-US")}. In the next 12 hours the chain found ${firstNight} blocks instead of about 600, and the longest wait was ${fmt(oct.longest_gap / 60, 0)} minutes. DGW v3 then brought the block pace back, but the hashrate stayed around ${th(oct.during)} until it partly returned in early November.`;
+
+const mdBy = {};
+if (M) for (const [start, before, during] of M.collapses) mdBy[start] = [share(before, DOMINANT), share(during, DOMINANT)];
+document.getElementById("episodes").innerHTML = `<tr><th>Start (UTC)</th><th>Block</th><th>Length</th><th>Before</th><th>Median hour</th><th>Depth</th><th>Worst hour</th><th>Blocks</th><th>Longest wait</th><th>${DOMINANT} share before → during</th></tr>` +
+  C.episodes.filter(e => e.hours >= 2 || e.depth >= 0.8).map(e => {
+    const md = mdBy[e.start];
+    return `<tr><td>${when(e.start)}</td><td>${e.first_height.toLocaleString("en-US")}</td><td>${hoursFmt(e.hours)}</td><td>${th(e.baseline)}</td><td>${th(e.during)}</td><td class="${e.depth >= 0.9 ? "bad" : ""}">−${pct(e.depth)}</td><td>−${pct(e.peak_depth)}</td><td>${e.blocks.toLocaleString("en-US")}</td><td>${fmt(e.longest_gap / 60, 0)} min</td><td>${md ? pct(md[0], 0) + " → " + pct(md[1], 0) : ""}</td></tr>`;
+  }).join("");
+
+/* ---------- who mines ---------- */
+if (M) {
+  document.getElementById("windows").innerHTML = `<tr><th>Window</th><th>Blocks</th><th>AuxPoW</th><th>Parent: Dash</th><th>HHI</th><th>Pools for > 50%</th><th class="left">Largest pools</th></tr>` +
+    M.windows.map(w => {
+      const dash = (w.parents.find(p => p[0] === "Dash height range") || [0, 0])[1];
+      const pools = w.pools.slice(0, 4).filter(p => p.share >= 0.001).map(p => `${p.pool} ${pct(p.share)}`).join(", ");
+      return `<tr><td>${w.label}</td><td>${w.blocks.toLocaleString("en-US")}</td><td>${pct(w.auxpow)}</td><td>${pct(dash)}</td><td>${fmt(w.hhi, 2)} <span class="rng">≈ ${fmt(1 / w.hhi, 1)} equal pools</span></td><td>${w.nakamoto}</td><td class="wrap">${pools}</td></tr>`;
+    }).join("");
+
+  // Pools that never reach 2% of any period are folded into "others".
+  const POOL_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s7", "--s5", "--s8"];
+  const keep = M.tracked.map((p, i) => i).filter(i => M.monthly.some(m => m.shares[i] >= 0.02));
+  const stacks = [...keep.map((i, k) => ({ label: M.tracked[i], color: POOL_COLORS[k % POOL_COLORS.length], values: M.monthly.map(m => m.shares[i]) })),
+    { label: "others", color: "--s11", values: M.monthly.map(m => 1 - keep.reduce((a, i) => a + m.shares[i], 0)) }];
+  legend(document.getElementById("pools-legend"), stacks.map(s => ({ ...s, kind: "box" })));
+  stackedBars(document.getElementById("pools-chart"), M.monthly.map(m => m.start), stacks);
+
+  const w90 = M.windows[1], md90 = w90.pools.find(p => p.pool === DOMINANT);
+  const lowParents = (w90.parents.find(p => p[0].startsWith("other")) || [0, 0])[1];
+  const octWeek = M.collapses.find(c => c[0] === oct.start);
+  const direct = octWeek ? (octWeek[2].parents.find(p => p[0].startsWith("none")) || [0, 0])[1] : 0;
+  document.getElementById("miners-note").textContent = `${DOMINANT} paid out to ${md90 ? md90.addresses : "–"} different addresses in the last 90 days and merges up to ${md90 ? md90.mm_size : "–"} aux chains in one tree. ${pct(lowParents)} of recent parents are not Dash but another X11 chain with heights below one million. During the October 2025 collapse, ${pct(direct, 0)} of Maximus blocks were mined directly, without AuxPoW, by a Miningcore pool. Before any fork, the pools to contact are ${M.windows[0].pools.filter(p => p.share >= 0.01).map(p => p.pool).join(" and ")}, plus the operators that stepped in during past collapses.`;
+}
+
+/* ---------- merge-mining ---------- */
+if (G) {
+  document.getElementById("parents-sub").textContent = `Maximus and Osmium share the parent block in ${pct(G.shared_parents_90d)} of the last 90 days' Maximus blocks`;
+  document.getElementById("parents").innerHTML = `<tr><th>Sample</th><th>Checked</th><th>On Dash main chain</th><th>Other height or fork</th><th>Not on Dash</th></tr>` +
+    G.checks.map(c => `<tr><td>${c.label}</td><td>${c.sampled}</td><td class="${c.on_dash === c.sampled ? "best" : ""}">${c.on_dash}</td><td>${c.mismatched}</td><td>${c.not_found}</td></tr>`).join("");
+  const arrow = (a, b) => `${pct(a, 0)} → ${pct(b, 0)}`;
+  document.getElementById("mm-sub").textContent = `${DOMINANT}'s share of each chain's blocks, week before → during the collapse`;
+  document.getElementById("mm-collapses").innerHTML = `<tr><th>Maximus collapse</th><th>Depth</th><th>Length</th><th>Maximus share</th><th>Osmium share</th><th>Osmium blocks/h</th><th>Dash share, sampled</th><th class="left">Reading</th></tr>` +
+    G.collapses.map(c => {
+      const r = reading(c);
+      return `<tr><td>${when(c.start)}</td><td>−${pct(c.depth)}</td><td>${hoursFmt(c.hours)}</td><td>${arrow(share(c.before.maximus, DOMINANT), share(c.during.maximus, DOMINANT))}</td><td>${arrow(share(c.before.osmium, DOMINANT), share(c.during.osmium, DOMINANT))}</td><td>${fmt(c.before.osmium_per_hour, 1)} → ${fmt(c.during.osmium_per_hour, 1)}</td><td>${arrow(dashShare(c.before, DOMINANT), dashShare(c.during, DOMINANT))}</td><td class="wrap ${r.kind === "dropped" ? "" : ""}">${r.text}</td></tr>`;
+    }).join("");
+  const checked = G.collapses.reduce((a, c) => a + c.osmium_parents.sampled, 0), onDash = G.collapses.reduce((a, c) => a + c.osmium_parents.on_dash, 0);
+  document.getElementById("mm-note").textContent = `${onDash} of ${checked} Osmium parents found during these collapses build on Dash's main chain, so the work going to Osmium was real Dash mining. A pool that merge-mines Maximus pays nothing extra for it, and while it leaves Maximus out its hashrate earns nothing more anywhere else. The profit switching in the main report assumes the opposite: miners who leave earn elsewhere in the meantime.`;
+}
+
+/* ---------- side by side ---------- */
+document.getElementById("grid-runs").textContent = D.grid_runs;
+const METRICS = [
+  { key: "hours_to_normal", label: "Hours to a normal pace", sub: "from the collapse until 24 blocks average under 1.5·T; capped at the collapse length", f: v => fmt(v, 1) + " h" },
+  { key: "longest_gap_min", label: "Longest wait for a block", sub: "minutes", f: v => fmt(v, 0) + " min" },
+  { key: "lost_hours", label: "Blocks lost during the collapse", sub: "hours of blocks a perfectly paced chain would have had", f: v => fmt(v, 2) + " h" },
+  { key: "burst", label: "Burst when the hashrate returns", sub: "blocks beyond the normal 50 in the first hour back", f: v => (v >= 0 ? "+" : "") + fmt(v, 0) },
+];
+let metric = METRICS[0];
+function drawGrid() {
+  document.getElementById("grid-title").textContent = metric.label;
+  document.getElementById("grid-sub").textContent = metric.sub;
+  let html = `<tr><th>Collapse</th>${D.algos.map(a => `<th><span class="name" style="display:inline-flex;gap:6px;align-items:center"><i style="width:8px;height:8px;border-radius:50%;background:var(${algoInfo(a).color});display:inline-block"></i>${short(a)}</span></th>`).join("")}</tr>`;
+  let depth = null;
+  for (const c of D.grid) {
+    if (c.depth !== depth) { depth = c.depth; html += `<tr class="group"><td colspan="${D.algos.length + 1}">−${pct(depth, 0)} of the hashrate</td></tr>`; }
+    const vals = c.algos.map(o => o[metric.key].mean);
+    const b = best(vals.map(Math.abs));
+    html += `<tr><td>for ${c.hours} h</td>${c.algos.map(o => { const v = o[metric.key]; return `<td class="${Math.abs(v.mean) === b ? "best" : ""}">${metric.f(v.mean)}<span class="rng">${metric.f(v.min)} – ${metric.f(v.max)}</span></td>`; }).join("")}</tr>`;
+  }
+  document.getElementById("grid").innerHTML = html;
+}
+tabs(document.getElementById("grid-tabs"), METRICS.map(m => ({ key: m.key, label: m.label, color: "--ink-2" })), key => { metric = METRICS.find(m => m.key === key); drawGrid(); });
+drawGrid();
+
+const depthCells = D.grid.filter(c => c.hours === 24);
+legend(document.getElementById("depth-legend"), D.algos.map(a => ({ label: short(a), color: algoInfo(a).color })));
+lineChart(document.getElementById("depth-chart"), () => ({
+  x: depthCells.map((c, i) => i), height: 240,
+  series: D.algos.map((a, i) => ({ label: short(a), color: algoInfo(a).color, values: depthCells.map(c => c.algos[i].hours_to_normal.mean) })),
+  xTicks: () => depthCells.map((c, i) => i), xFmt: i => "−" + fmt(100 * depthCells[i].depth, 0) + "% for 24 h", xTipFmt: i => "−" + fmt(100 * depthCells[i].depth, 0) + "% for 24 h", yFmt: v => fmt(v, 0) + " h", yTipFmt: v => fmt(v, 1) + " h", yMin: 0,
+  aria: "Hours to a normal pace by collapse depth",
+}));
+
+/* ---------- scorecard ---------- */
+const exit = D.switching.exits.find(c => c.share >= 0.99 && c.hours === 6);
+const COLS = [
+  { label: "Stall hours / year", get: (a, i) => D.weighted[i].stalled_hours, f: v => fmt(v, 1), group: "real collapses" },
+  { label: "Blocks lost / year", get: (a, i) => D.weighted[i].lost_hours, f: v => fmt(v, 1) + " h", group: "real collapses" },
+  { label: "Burst blocks / year", get: (a, i) => D.weighted[i].burst_blocks, f: v => fmt(v, 0), group: "real collapses" },
+  { label: "Worst wait", get: (a, i) => D.weighted[i].worst_gap_min, f: v => fmt(v, 0) + " min", group: "real collapses" },
+  { label: "Mean block time", get: a => steady(a).mean_solvetime, f: v => fmt(v, 1) + " s", group: "steady", target: T },
+  { label: "Gaps > 7 min / day", get: a => steady(a).gaps_over_7min_per_day, f: v => fmt(v, 2), group: "steady" },
+  { label: "Difficulty jitter", get: a => steady(a).difficulty_jitter_pct, f: v => fmt(v, 1) + "%", group: "steady" },
+  { label: "Profit-switcher edge", get: (a, i) => D.switching.hoppers[0].algos[i].edge, f: v => fmt(v, 2), group: "switching", target: 1 },
+  { label: "Pool back after 6 h away", get: (a, i) => exit.algos[i].pool, f: v => fmt(v, 2), group: "switching", target: 1 },
+];
+document.getElementById("score-sub").textContent = `${D.catalogue.length} real collapses × ${D.catalogue_runs} runs, scaled to a year from ${fmt(D.catalogue_years, 2)} years of history`;
+document.getElementById("score").innerHTML = `<tr><th>Algorithm</th>${COLS.map(c => `<th>${c.label}<span class="rng">${c.group}</span></th>`).join("")}</tr>` +
+  D.algos.map((a, i) => `<tr><td><span class="name" style="display:inline-flex;gap:8px;align-items:center;font-weight:600"><i style="width:10px;height:10px;border-radius:50%;background:var(${algoInfo(a).color});display:inline-block"></i>${short(a)}</span></td>${COLS.map(c => {
+    const vals = D.algos.map((x, k) => c.get(x, k)), dist = v => c.target != null ? Math.abs(v - c.target) : v;
+    const b = Math.min(...vals.map(dist));
+    return `<td class="${dist(c.get(a, i)) === b ? "best" : ""}">${c.f(c.get(a, i))}</td>`;
+  }).join("")}</tr>`).join("");
+document.getElementById("score-note").textContent = `"Pool back after 6 h away" is the blocks per hash earned by a pool with 99% of the hashrate that leaves for 6 hours and comes back, compared with mining steadily (1.00 = no gain), as in the main report. That number is for a pool that earns elsewhere while away. A merge-mining pool earns nothing more elsewhere, so for it the burst on return only partly makes up for the blocks it gave up.`;
+
+document.getElementById("m-lat").textContent = "5";
+document.getElementById("footer").innerHTML = `<span>Generated by difficulty-lab from mainnet headers up to block #${D.tip_height.toLocaleString("en-US")}. <a href="index.html" style="color:inherit">Main report</a>.</span>`;
+
+/* ---------- stacked bars, one per period ---------- */
+function stackedBars(host, starts, stacks) {
+  const draw = () => {
+    host.innerHTML = "";
+    const W = host.clientWidth || 600, H = 240, m = { l: 44, r: 10, t: 10, b: 26 };
+    const n = starts.length, bw = (W - m.l - m.r) / n;
+    const sy = v => m.t + (H - m.t - m.b) * (1 - v);
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": "Share of blocks per pool over time" });
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      svg.append(svgEl("line", { x1: m.l, x2: W - m.r, y1: sy(t), y2: sy(t), stroke: "var(--grid)" }));
+      const tx = svgEl("text", { x: m.l - 6, y: sy(t) + 4, "text-anchor": "end" }); tx.textContent = (t * 100) + "%"; svg.append(tx);
+    }
+    const every = Math.ceil(n / Math.max(2, Math.floor((W - m.l) / 70)));
+    starts.forEach((s, i) => {
+      let acc = 0;
+      for (const st of stacks) {
+        const v = Math.max(0, st.values[i]);
+        if (v > 0) svg.append(svgEl("rect", { x: m.l + i * bw + 1, y: sy(acc + v), width: Math.max(1, bw - 2), height: sy(acc) - sy(acc + v), fill: cssVar(st.color) }));
+        acc += v;
+      }
+      if (i % every === 0) { const tx = svgEl("text", { x: m.l + (i + 0.5) * bw, y: H - 6, "text-anchor": "middle" }); tx.textContent = monthFmt(s); svg.append(tx); }
+    });
+    const hit = svgEl("rect", { x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent" }); svg.append(hit);
+    host.append(svg);
+    const tip = el("div", { class: "tip", hidden: "" }); host.append(tip);
+    hit.addEventListener("pointermove", ev => {
+      const r = svg.getBoundingClientRect();
+      const i = Math.min(n - 1, Math.max(0, Math.floor(((ev.clientX - r.left) * (W / r.width) - m.l) / bw)));
+      tip.innerHTML = `<div style="color:var(--muted);margin-bottom:2px">30 days from ${dateFmt(starts[i])}</div>` + stacks.filter(s => s.values[i] >= 0.0005).map(s => `<div class="row"><span><i style="--c:${cssVar(s.color)}"></i>${s.label}</span><b>${pct(s.values[i])}</b></div>`).join("");
+      tip.hidden = false;
+      const left = ((m.l + (i + 0.5) * bw) / W) * r.width;
+      tip.style.top = "8px";
+      tip.style.left = (left + 12 + tip.offsetWidth > r.width ? Math.max(0, left - tip.offsetWidth - 12) : left + 12) + "px";
+    });
+    hit.addEventListener("pointerleave", () => { tip.hidden = true; });
+  };
+  redrawers.push(draw);
+  draw();
+}
+</script>
